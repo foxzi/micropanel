@@ -54,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audit log UI for admins
 - Configurable limits (ZIP size, file size, upload size, sites per user)
 - Audit logging integration for all handlers
+- Rate limiting for login (5 attempts/min)
+- Rate limiting for API (100 requests/min)
+- User management (admin): list, create, edit, block/unblock, delete
+- User profile page with password change
+- SSL auto-renewal scripts (systemd timer/cron)
 
 ### Changed
 - License changed to GPL-3.0
