@@ -1,0 +1,140 @@
+name: Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install tools
+        run: |
+          go install github.com/a-h/templ/cmd/templ@latest
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+      - name: Generate templates
+        run: templ generate
+
+      - name: Build binary
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p bin
+          go build -ldflags="-s -w" -o bin/micropanel ./cmd/micropanel
+
+      - name: Build packages
+        run: |
+          mkdir -p dist
+          VERSION=${{ github.event.inputs.version }} GOARCH=${{ matrix.arch }} nfpm pkg --packager deb --target dist/
+          VERSION=${{ github.event.inputs.version }} GOARCH=${{ matrix.arch }} nfpm pkg --packager rpm --target dist/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          name: MicroPanel v${{ github.event.inputs.version }}
+          generate_release_notes: true
+          files: dist/*
+
+  pages:
+    needs: release
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+
+      - name: Generate page
+        run: |
+          mkdir -p _site/packages
+          cp packages/* _site/packages/ || true
+          VERSION=${{ github.event.inputs.version }}
+          cat > _site/index.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>MicroPanel Downloads</title>
+            <style>
+              body { font-family: system-ui; max-width: 800px; margin: 2rem auto; padding: 1rem; }
+              .card { background: #f5f5f5; padding: 1.5rem; border-radius: 8px; margin: 1rem 0; }
+              a.btn { display: inline-block; padding: 0.5rem 1rem; background: #2563eb; color: white; text-decoration: none; border-radius: 4px; margin: 0.25rem; }
+              a.btn.rpm { background: #dc2626; }
+              pre { background: #1f2937; color: white; padding: 1rem; border-radius: 4px; overflow-x: auto; }
+            </style>
+          </head>
+          <body>
+            <h1>MicroPanel</h1>
+            <p>Minimalist static hosting control panel</p>
+            <div class="card">
+              <h2>Download v${VERSION}</h2>
+              <h3>AMD64</h3>
+              <a class="btn" href="packages/micropanel_${VERSION}_amd64.deb">DEB</a>
+              <a class="btn rpm" href="packages/micropanel-${VERSION}-1.x86_64.rpm">RPM</a>
+              <h3>ARM64</h3>
+              <a class="btn" href="packages/micropanel_${VERSION}_arm64.deb">DEB</a>
+              <a class="btn rpm" href="packages/micropanel-${VERSION}-1.aarch64.rpm">RPM</a>
+            </div>
+            <div class="card">
+              <h2>Install</h2>
+              <pre>sudo dpkg -i micropanel_${VERSION}_amd64.deb
+          sudo systemctl enable --now micropanel</pre>
+            </div>
+            <p><a href="https://github.com/foxzi/micropanel">GitHub</a></p>
+          </body>
+          </html>
+          EOF
+
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - uses: actions/deploy-pages@v4
+        id: deployment
