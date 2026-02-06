@@ -60,6 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User profile page with password change
 - SSL auto-renewal scripts (systemd timer/cron)
 - SSL status color-coded indicators (valid/expiring/expired)
+- DEB and RPM package building via nfpm
+- Systemd service file for micropanel
+- Packaging scripts (preinstall, postinstall, preremove)
 
 ### Changed
 - License changed to GPL-3.0

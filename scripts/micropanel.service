@@ -1,0 +1,27 @@
+[Unit]
+Description=MicroPanel - Static Hosting Control Panel
+After=network.target nginx.service
+Wants=nginx.service
+
+[Service]
+Type=simple
+User=micropanel
+Group=micropanel
+WorkingDirectory=/opt/micropanel
+ExecStart=/opt/micropanel/bin/micropanel
+Restart=on-failure
+RestartSec=5
+
+# Environment
+Environment=APP_ENV=production
+EnvironmentFile=-/etc/micropanel/micropanel.env
+
+# Security
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/micropanel/data /var/www/panel/sites /etc/nginx/sites-enabled
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

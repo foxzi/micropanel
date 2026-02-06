@@ -1,4 +1,7 @@
-.PHONY: dev build templ migrate-up migrate-down test clean
+.PHONY: dev build templ migrate-up migrate-down test clean package-deb package-rpm
+
+VERSION ?= 1.0.0
+GOARCH ?= amd64
 
 # Development
 dev:
@@ -53,6 +56,15 @@ local-db:
 	mkdir -p data
 	sqlite3 data/micropanel.db < migrations/001_init.up.sql
 
+# Packaging
+package-deb: build
+	VERSION=$(VERSION) GOARCH=$(GOARCH) nfpm pkg --packager deb --target dist/
+
+package-rpm: build
+	VERSION=$(VERSION) GOARCH=$(GOARCH) nfpm pkg --packager rpm --target dist/
+
+package-all: package-deb package-rpm
+
 # Help
 help:
 	@echo "Available targets:"
@@ -67,4 +79,11 @@ help:
 	@echo "  test         - Run tests"
 	@echo "  clean        - Clean build artifacts"
 	@echo "  local-run    - Run locally without Docker"
+	@echo "  package-deb  - Build DEB package (requires nfpm)"
+	@echo "  package-rpm  - Build RPM package (requires nfpm)"
+	@echo "  package-all  - Build DEB and RPM packages"
 	@echo "  help         - Show this help"
+	@echo ""
+	@echo "Packaging options:"
+	@echo "  VERSION=1.0.0  - Set package version"
+	@echo "  GOARCH=amd64   - Set architecture (amd64, arm64)"

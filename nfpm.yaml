@@ -1,0 +1,103 @@
+name: micropanel
+arch: ${GOARCH}
+platform: linux
+version: ${VERSION}
+release: 1
+section: web
+priority: optional
+maintainer: MicroPanel Team
+description: |
+  Minimalist static hosting control panel.
+  Manages static websites with Nginx, SSL certificates via Let's Encrypt,
+  redirects, basic auth, and file editing.
+vendor: MicroPanel
+homepage: https://github.com/foxzi/micropanel
+license: GPL-3.0
+
+depends:
+  - nginx
+  - openssl
+
+recommends:
+  - certbot
+
+contents:
+  # Binary
+  - src: bin/micropanel
+    dst: /opt/micropanel/bin/micropanel
+    file_info:
+      mode: 0755
+
+  # Config example
+  - src: config.yaml.example
+    dst: /opt/micropanel/config.yaml.example
+    type: config
+    file_info:
+      mode: 0644
+
+  # Migrations
+  - src: migrations/
+    dst: /opt/micropanel/migrations/
+    file_info:
+      mode: 0644
+
+  # Scripts
+  - src: scripts/ssl-renew.sh
+    dst: /opt/micropanel/scripts/ssl-renew.sh
+    file_info:
+      mode: 0755
+
+  # Systemd services
+  - src: scripts/micropanel.service
+    dst: /usr/lib/systemd/system/micropanel.service
+    file_info:
+      mode: 0644
+
+  - src: scripts/micropanel-ssl-renew.service
+    dst: /usr/lib/systemd/system/micropanel-ssl-renew.service
+    file_info:
+      mode: 0644
+
+  - src: scripts/micropanel-ssl-renew.timer
+    dst: /usr/lib/systemd/system/micropanel-ssl-renew.timer
+    file_info:
+      mode: 0644
+
+  # Directories
+  - dst: /opt/micropanel/data
+    type: dir
+    file_info:
+      mode: 0755
+      owner: micropanel
+      group: micropanel
+
+  - dst: /var/www/panel/sites
+    type: dir
+    file_info:
+      mode: 0755
+      owner: micropanel
+      group: micropanel
+
+  - dst: /etc/micropanel
+    type: dir
+    file_info:
+      mode: 0755
+
+scripts:
+  preinstall: packaging/preinstall.sh
+  postinstall: packaging/postinstall.sh
+  preremove: packaging/preremove.sh
+
+overrides:
+  deb:
+    depends:
+      - nginx
+      - openssl
+    recommends:
+      - certbot
+  rpm:
+    depends:
+      - nginx
+      - openssl
+    recommends:
+      - certbot
