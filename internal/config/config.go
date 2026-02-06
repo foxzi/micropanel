@@ -12,6 +12,12 @@ type Config struct {
 	Database DatabaseConfig `yaml:"database"`
 	Sites    SitesConfig    `yaml:"sites"`
 	Nginx    NginxConfig    `yaml:"nginx"`
+	SSL      SSLConfig      `yaml:"ssl"`
+}
+
+type SSLConfig struct {
+	Email   string `yaml:"email"`
+	Staging bool   `yaml:"staging"`
 }
 
 type AppConfig struct {
@@ -50,6 +56,10 @@ func Load() (*Config, error) {
 			ConfigPath: "/etc/nginx/sites-enabled",
 			ReloadCmd:  "nginx -s reload",
 		},
+		SSL: SSLConfig{
+			Email:   "",
+			Staging: false,
+		},
 	}
 
 	// Load from YAML if exists
@@ -79,6 +89,12 @@ func Load() (*Config, error) {
 	}
 	if nginxPath := os.Getenv("NGINX_CONFIG_PATH"); nginxPath != "" {
 		cfg.Nginx.ConfigPath = nginxPath
+	}
+	if sslEmail := os.Getenv("SSL_EMAIL"); sslEmail != "" {
+		cfg.SSL.Email = sslEmail
+	}
+	if sslStaging := os.Getenv("SSL_STAGING"); sslStaging == "true" {
+		cfg.SSL.Staging = true
 	}
 
 	return cfg, nil
