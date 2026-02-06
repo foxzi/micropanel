@@ -27,3 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nginx config generation service
 - Nginx site config template with SSL support
 - Nginx reload with config validation and rollback
+- ZIP deploy with secure extraction
+- Path traversal and symlink protection
+- Atomic directory swap for zero-downtime deploys
+- Deploy history with status tracking
+- Rollback to previous version
