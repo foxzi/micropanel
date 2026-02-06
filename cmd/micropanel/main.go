@@ -48,12 +48,14 @@ func main() {
 	siteService := services.NewSiteService(siteRepo, domainRepo, cfg)
 	nginxService := services.NewNginxService(cfg, siteRepo, domainRepo)
 	deployService := services.NewDeployService(cfg, deployRepo, siteRepo)
+	sslService := services.NewSSLService(cfg, domainRepo, nginxService)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	siteHandler := handlers.NewSiteHandler(siteService, deployService)
 	domainHandler := handlers.NewDomainHandler(domainRepo, siteService, nginxService)
 	deployHandler := handlers.NewDeployHandler(deployService, siteService)
+	sslHandler := handlers.NewSSLHandler(sslService, siteService)
 
 	// Setup Gin
 	if !cfg.IsDevelopment() {
@@ -91,6 +93,10 @@ func main() {
 		// Deploy routes
 		protected.POST("/sites/:id/deploy", deployHandler.Upload)
 		protected.POST("/sites/:id/rollback", deployHandler.Rollback)
+
+		// SSL routes
+		protected.POST("/sites/:id/ssl/issue", sslHandler.Issue)
+		protected.POST("/ssl/renew", sslHandler.Renew)
 	}
 
 	// Graceful shutdown
