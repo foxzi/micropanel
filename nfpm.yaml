@@ -63,6 +63,17 @@ contents:
     file_info:
       mode: 0644
 
+  # Documentation
+  - src: README.md
+    dst: /usr/share/doc/micropanel/README.md
+    file_info:
+      mode: 0644
+
+  - src: docs/
+    dst: /usr/share/doc/micropanel/docs/
+    file_info:
+      mode: 0644
+
   # Directories
   - dst: /opt/micropanel/data
     type: dir
