@@ -55,6 +55,7 @@ func main() {
 	sslService := services.NewSSLService(cfg, domainRepo, nginxService)
 	redirectService := services.NewRedirectService(redirectRepo, nginxService)
 	authZoneService := services.NewAuthZoneService(cfg, authZoneRepo, nginxService)
+	fileService := services.NewFileService(cfg)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
@@ -64,6 +65,7 @@ func main() {
 	sslHandler := handlers.NewSSLHandler(sslService, siteService)
 	redirectHandler := handlers.NewRedirectHandler(redirectService, siteService)
 	authZoneHandler := handlers.NewAuthZoneHandler(authZoneService, siteService)
+	fileHandler := handlers.NewFileHandler(fileService, siteService)
 
 	// Setup Gin
 	if !cfg.IsDevelopment() {
@@ -90,6 +92,7 @@ func main() {
 		protected.GET("/", siteHandler.Dashboard)
 		protected.POST("/sites", siteHandler.Create)
 		protected.GET("/sites/:id", siteHandler.View)
+		protected.GET("/sites/:id/files-page", siteHandler.Files)
 		protected.POST("/sites/:id", siteHandler.Update)
 		protected.DELETE("/sites/:id", siteHandler.Delete)
 
@@ -119,6 +122,18 @@ func main() {
 		protected.POST("/sites/:id/auth-zones/:zoneId/toggle", authZoneHandler.Toggle)
 		protected.POST("/sites/:id/auth-zones/:zoneId/users", authZoneHandler.CreateUser)
 		protected.DELETE("/sites/:id/auth-zones/:zoneId/users/:userId", authZoneHandler.DeleteUser)
+
+		// File manager routes
+		protected.GET("/sites/:id/files", fileHandler.List)
+		protected.GET("/sites/:id/files/read", fileHandler.Read)
+		protected.POST("/sites/:id/files/write", fileHandler.Write)
+		protected.POST("/sites/:id/files/create", fileHandler.Create)
+		protected.DELETE("/sites/:id/files", fileHandler.Delete)
+		protected.POST("/sites/:id/files/rename", fileHandler.Rename)
+		protected.POST("/sites/:id/files/upload", fileHandler.Upload)
+		protected.GET("/sites/:id/files/download", fileHandler.Download)
+		protected.GET("/sites/:id/files/preview", fileHandler.Preview)
+		protected.GET("/sites/:id/files/info", fileHandler.Info)
 	}
 
 	// Graceful shutdown

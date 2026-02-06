@@ -138,6 +138,31 @@ func (h *SiteHandler) Update(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/sites/"+strconv.FormatInt(id, 10))
 }
 
+func (h *SiteHandler) Files(c *gin.Context) {
+	user := middleware.GetUser(c)
+	csrfToken := middleware.GetCSRFToken(c)
+
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.String(http.StatusBadRequest, "Invalid site ID")
+		return
+	}
+
+	site, err := h.siteService.GetByID(id)
+	if err != nil {
+		c.String(http.StatusNotFound, "Site not found")
+		return
+	}
+
+	if !h.siteService.CanAccess(site, user) {
+		c.String(http.StatusForbidden, "Access denied")
+		return
+	}
+
+	component := pages.Files(user, site, csrfToken)
+	component.Render(c.Request.Context(), c.Writer)
+}
+
 func (h *SiteHandler) Delete(c *gin.Context) {
 	user := middleware.GetUser(c)
 

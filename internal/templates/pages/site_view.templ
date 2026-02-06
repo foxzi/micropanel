@@ -332,6 +332,19 @@ templ SiteView(user *models.User, site *models.Site, deploys []*models.Deploy, r
 
 		<div class="bg-white rounded-lg shadow p-6 mb-6">
 			<div class="flex justify-between items-center mb-4">
+				<h2 class="text-xl font-bold">File Manager</h2>
+				<a
+					href={ templ.SafeURL(fmt.Sprintf("/sites/%d/files-page", site.ID)) }
+					class="bg-indigo-500 hover:bg-indigo-700 text-white text-sm font-bold py-1 px-3 rounded"
+				>
+					Open File Manager
+				</a>
+			</div>
+			<p class="text-gray-500">Edit, upload, and manage files directly in your site's public directory.</p>
+		</div>
+
+		<div class="bg-white rounded-lg shadow p-6 mb-6">
+			<div class="flex justify-between items-center mb-4">
 				<h2 class="text-xl font-bold">Deploy</h2>
 				if canRollback {
 					<button
