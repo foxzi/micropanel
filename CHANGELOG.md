@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User profile page with password change
 - SSL auto-renewal scripts (systemd timer/cron)
 - SSL status color-coded indicators (valid/expiring/expired)
+- CLI commands for user management (list, create, delete, reset-password)
+- CLI commands for site management (list, create, delete, enable, disable)
 - DEB and RPM package building via nfpm
 - Systemd service file for micropanel
 - Packaging scripts (preinstall, postinstall, preremove)
