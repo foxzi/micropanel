@@ -1,4 +1,4 @@
-# Build and release DEB/RPM packages
+# Build and release DEB/RPM packages for MicroPanel
 name: Release
 
 on:
