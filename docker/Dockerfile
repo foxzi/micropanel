@@ -42,4 +42,4 @@ RUN mkdir -p /var/www/panel/sites /app/data
 
 EXPOSE 8080
 
-CMD ["./micropanel"]
+CMD ["./micropanel", "serve"]
