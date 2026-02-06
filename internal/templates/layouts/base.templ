@@ -1,0 +1,48 @@
+package layouts
+
+import "micropanel/internal/models"
+
+templ Base(title string, user *models.User) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>{ title } - MicroPanel</title>
+		<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+		<script src="https://cdn.tailwindcss.com"></script>
+		<style>
+			[x-cloak] { display: none !important; }
+		</style>
+	</head>
+	<body class="bg-gray-100 min-h-screen">
+		if user != nil {
+			@navbar(user)
+		}
+		<main class="container mx-auto px-4 py-8">
+			{ children... }
+		</main>
+	</body>
+	</html>
+}
+
+templ navbar(user *models.User) {
+	<nav class="bg-white shadow">
+		<div class="container mx-auto px-4">
+			<div class="flex justify-between h-16">
+				<div class="flex items-center">
+					<a href="/" class="text-xl font-bold text-gray-900">MicroPanel</a>
+				</div>
+				<div class="flex items-center space-x-4">
+					<span class="text-gray-600">{ user.Email }</span>
+					if user.IsAdmin() {
+						<span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">Admin</span>
+					}
+					<form hx-post="/logout" hx-swap="none">
+						<button type="submit" class="text-gray-600 hover:text-gray-900">Logout</button>
+					</form>
+				</div>
+			</div>
+		</div>
+	</nav>
+}
