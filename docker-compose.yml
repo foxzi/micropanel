@@ -1,0 +1,58 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: micropanel-app
+    restart: unless-stopped
+    environment:
+      - APP_ENV=development
+      - APP_PORT=8080
+      - APP_SECRET=change-me-in-production
+      - DB_PATH=/app/data/micropanel.db
+      - SITES_PATH=/var/www/panel/sites
+      - NGINX_CONFIG_PATH=/etc/nginx/sites-enabled
+    volumes:
+      - ./data:/app/data
+      - sites_data:/var/www/panel/sites
+      - nginx_sites:/etc/nginx/sites-enabled
+    expose:
+      - "8080"
+    networks:
+      - micropanel
+
+  nginx:
+    image: nginx:alpine
+    container_name: micropanel-nginx
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - sites_data:/var/www/panel/sites:ro
+      - nginx_sites:/etc/nginx/sites-enabled:ro
+      - certbot_conf:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      - app
+    networks:
+      - micropanel
+
+  certbot:
+    image: certbot/certbot
+    container_name: micropanel-certbot
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+volumes:
+  sites_data:
+  nginx_sites:
+  certbot_conf:
+  certbot_www:
+
+networks:
+  micropanel:
+    driver: bridge
