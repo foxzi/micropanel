@@ -1,0 +1,19 @@
+DROP INDEX IF EXISTS idx_sessions_expires;
+DROP INDEX IF EXISTS idx_sessions_user;
+DROP INDEX IF EXISTS idx_audit_log_created;
+DROP INDEX IF EXISTS idx_audit_log_user;
+DROP INDEX IF EXISTS idx_deploys_site;
+DROP INDEX IF EXISTS idx_auth_zones_site;
+DROP INDEX IF EXISTS idx_redirects_site;
+DROP INDEX IF EXISTS idx_domains_site;
+DROP INDEX IF EXISTS idx_sites_owner;
+
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS audit_log;
+DROP TABLE IF EXISTS deploys;
+DROP TABLE IF EXISTS auth_zone_users;
+DROP TABLE IF EXISTS auth_zones;
+DROP TABLE IF EXISTS redirects;
+DROP TABLE IF EXISTS domains;
+DROP TABLE IF EXISTS sites;
+DROP TABLE IF EXISTS users;
