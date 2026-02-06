@@ -91,46 +91,114 @@ jobs:
           path: packages
           merge-multiple: true
 
-      - name: Generate page
+      - name: Generate APT repository
         run: |
-          mkdir -p _site/packages
-          cp packages/* _site/packages/ || true
           VERSION=${{ github.event.inputs.version }}
-          cat > _site/index.html << EOF
+
+          # Create APT repo structure
+          mkdir -p _site/apt/pool/main
+          mkdir -p _site/apt/dists/stable/main/binary-amd64
+          mkdir -p _site/apt/dists/stable/main/binary-arm64
+
+          # Copy DEB packages to pool
+          cp packages/*.deb _site/apt/pool/main/
+
+          # Generate Packages files
+          cd _site/apt
+          dpkg-scanpackages pool/main /dev/null > dists/stable/main/binary-amd64/Packages
+          dpkg-scanpackages pool/main /dev/null > dists/stable/main/binary-arm64/Packages
+          gzip -k dists/stable/main/binary-amd64/Packages
+          gzip -k dists/stable/main/binary-arm64/Packages
+
+          # Generate Release file
+          cat > dists/stable/Release << RELEASE
+          Origin: MicroPanel
+          Label: MicroPanel
+          Suite: stable
+          Codename: stable
+          Architectures: amd64 arm64
+          Components: main
+          Description: MicroPanel APT Repository
+          RELEASE
+
+          cd ../..
+
+          # Copy RPM packages
+          mkdir -p _site/rpm
+          cp packages/*.rpm _site/rpm/
+
+          # Generate index.html
+          cat > _site/index.html << 'HTMLEOF'
           <!DOCTYPE html>
           <html>
           <head>
             <meta charset="UTF-8">
             <title>MicroPanel Downloads</title>
             <style>
-              body { font-family: system-ui; max-width: 800px; margin: 2rem auto; padding: 1rem; }
+              body { font-family: system-ui; max-width: 900px; margin: 2rem auto; padding: 1rem; line-height: 1.6; }
+              h1 { border-bottom: 2px solid #2563eb; padding-bottom: 0.5rem; }
               .card { background: #f5f5f5; padding: 1.5rem; border-radius: 8px; margin: 1rem 0; }
               a.btn { display: inline-block; padding: 0.5rem 1rem; background: #2563eb; color: white; text-decoration: none; border-radius: 4px; margin: 0.25rem; }
               a.btn.rpm { background: #dc2626; }
-              pre { background: #1f2937; color: white; padding: 1rem; border-radius: 4px; overflow-x: auto; }
+              pre { background: #1f2937; color: #f9fafb; padding: 1rem; border-radius: 4px; overflow-x: auto; }
+              code { background: #e5e7eb; padding: 0.2rem 0.4rem; border-radius: 4px; }
+              .note { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 1rem; margin: 1rem 0; }
             </style>
           </head>
           <body>
             <h1>MicroPanel</h1>
             <p>Minimalist static hosting control panel</p>
+
             <div class="card">
-              <h2>Download v${VERSION}</h2>
-              <h3>AMD64</h3>
-              <a class="btn" href="packages/micropanel_${VERSION}_amd64.deb">DEB</a>
-              <a class="btn rpm" href="packages/micropanel-${VERSION}-1.x86_64.rpm">RPM</a>
-              <h3>ARM64</h3>
-              <a class="btn" href="packages/micropanel_${VERSION}_arm64.deb">DEB</a>
-              <a class="btn rpm" href="packages/micropanel-${VERSION}-1.aarch64.rpm">RPM</a>
+              <h2>APT Repository (Debian/Ubuntu)</h2>
+              <p>Add the repository:</p>
+              <pre>echo "deb [trusted=yes] https://foxzi.github.io/micropanel/apt stable main" | sudo tee /etc/apt/sources.list.d/micropanel.list
+          sudo apt update
+          sudo apt install micropanel</pre>
+              <div class="note">
+                <strong>Note:</strong> This repository is not GPG signed. The <code>[trusted=yes]</code> option is required.
+              </div>
             </div>
+
             <div class="card">
-              <h2>Install</h2>
-              <pre>sudo dpkg -i micropanel_${VERSION}_amd64.deb
-          sudo systemctl enable --now micropanel</pre>
+              <h2>Direct Download</h2>
+              <h3>DEB packages</h3>
+              <p>
+                <a class="btn" href="apt/pool/main/micropanel_CURRENT_VERSION-1_amd64.deb">amd64</a>
+                <a class="btn" href="apt/pool/main/micropanel_CURRENT_VERSION-1_arm64.deb">arm64</a>
+              </p>
+              <h3>RPM packages</h3>
+              <p>
+                <a class="btn rpm" href="rpm/micropanel-CURRENT_VERSION-1.x86_64.rpm">x86_64</a>
+                <a class="btn rpm" href="rpm/micropanel-CURRENT_VERSION-1.aarch64.rpm">aarch64</a>
+              </p>
             </div>
-            <p><a href="https://github.com/foxzi/micropanel">GitHub</a></p>
+
+            <div class="card">
+              <h2>Post-install</h2>
+              <pre># Configure
+          sudo nano /etc/micropanel/micropanel.env
+
+          # Start service
+          sudo systemctl enable --now micropanel
+
+          # Check status
+          sudo systemctl status micropanel</pre>
+              <p>Default login: <code>admin@localhost</code> / <code>admin</code></p>
+            </div>
+
+            <div class="card">
+              <h2>Links</h2>
+              <p>
+                <a href="https://github.com/foxzi/micropanel">GitHub</a> |
+                <a href="https://github.com/foxzi/micropanel/releases">Releases</a>
+              </p>
+            </div>
           </body>
           </html>
-          EOF
+          HTMLEOF
+
+          sed -i "s/CURRENT_VERSION/${VERSION}/g" _site/index.html
 
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
