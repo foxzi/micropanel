@@ -1,5 +1,6 @@
 # Binaries
 bin/
+/micropanel
 *.exe
 *.exe~
 *.dll

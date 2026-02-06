@@ -32,3 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Atomic directory swap for zero-downtime deploys
 - Deploy history with status tracking
 - Rollback to previous version
+- SSL certificate management via Certbot/Let's Encrypt
+- SSL configuration (email, staging mode)
+- Certificate issue/renew API endpoints
+- SSL status display in site view
+- Certificate expiry tracking
