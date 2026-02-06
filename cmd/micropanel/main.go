@@ -42,20 +42,28 @@ func main() {
 	siteRepo := repository.NewSiteRepository(db)
 	domainRepo := repository.NewDomainRepository(db)
 	deployRepo := repository.NewDeployRepository(db)
+	redirectRepo := repository.NewRedirectRepository(db)
+	authZoneRepo := repository.NewAuthZoneRepository(db)
 
 	// Initialize services
 	authService := services.NewAuthService(userRepo, sessionRepo)
 	siteService := services.NewSiteService(siteRepo, domainRepo, cfg)
 	nginxService := services.NewNginxService(cfg, siteRepo, domainRepo)
+	nginxService.SetRedirectRepo(redirectRepo)
+	nginxService.SetAuthZoneRepo(authZoneRepo)
 	deployService := services.NewDeployService(cfg, deployRepo, siteRepo)
 	sslService := services.NewSSLService(cfg, domainRepo, nginxService)
+	redirectService := services.NewRedirectService(redirectRepo, nginxService)
+	authZoneService := services.NewAuthZoneService(cfg, authZoneRepo, nginxService)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
-	siteHandler := handlers.NewSiteHandler(siteService, deployService)
+	siteHandler := handlers.NewSiteHandler(siteService, deployService, redirectService, authZoneService)
 	domainHandler := handlers.NewDomainHandler(domainRepo, siteService, nginxService)
 	deployHandler := handlers.NewDeployHandler(deployService, siteService)
 	sslHandler := handlers.NewSSLHandler(sslService, siteService)
+	redirectHandler := handlers.NewRedirectHandler(redirectService, siteService)
+	authZoneHandler := handlers.NewAuthZoneHandler(authZoneService, siteService)
 
 	// Setup Gin
 	if !cfg.IsDevelopment() {
@@ -97,6 +105,20 @@ func main() {
 		// SSL routes
 		protected.POST("/sites/:id/ssl/issue", sslHandler.Issue)
 		protected.POST("/ssl/renew", sslHandler.Renew)
+
+		// Redirect routes
+		protected.POST("/sites/:id/redirects", redirectHandler.Create)
+		protected.POST("/sites/:id/redirects/:redirectId", redirectHandler.Update)
+		protected.DELETE("/sites/:id/redirects/:redirectId", redirectHandler.Delete)
+		protected.POST("/sites/:id/redirects/:redirectId/toggle", redirectHandler.Toggle)
+
+		// Auth zone routes
+		protected.POST("/sites/:id/auth-zones", authZoneHandler.Create)
+		protected.POST("/sites/:id/auth-zones/:zoneId", authZoneHandler.Update)
+		protected.DELETE("/sites/:id/auth-zones/:zoneId", authZoneHandler.Delete)
+		protected.POST("/sites/:id/auth-zones/:zoneId/toggle", authZoneHandler.Toggle)
+		protected.POST("/sites/:id/auth-zones/:zoneId/users", authZoneHandler.CreateUser)
+		protected.DELETE("/sites/:id/auth-zones/:zoneId/users/:userId", authZoneHandler.DeleteUser)
 	}
 
 	// Graceful shutdown
