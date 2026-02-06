@@ -23,7 +23,18 @@ Minimalist static hosting control panel written in Go.
 
 ## Installation
 
-### From packages (recommended)
+### APT repository (Debian/Ubuntu)
+
+```bash
+# Add repository
+echo "deb [trusted=yes] https://foxzi.github.io/micropanel/apt stable main" | sudo tee /etc/apt/sources.list.d/micropanel.list
+
+# Install
+sudo apt update
+sudo apt install micropanel
+```
+
+### Direct download
 
 Download packages from [Releases](https://github.com/foxzi/micropanel/releases) or [Downloads page](https://foxzi.github.io/micropanel/).
 
