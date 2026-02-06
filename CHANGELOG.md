@@ -37,3 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Certificate issue/renew API endpoints
 - SSL status display in site view
 - Certificate expiry tracking
+- Redirect management (301/302, preserve path/query)
+- Redirect CRUD with priority support
+- Basic Auth zones with path prefix protection
+- Auth zone user management with bcrypt
+- htpasswd file generation
+- Nginx config integration for redirects and auth
