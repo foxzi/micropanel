@@ -13,12 +13,14 @@ import (
 type DeployHandler struct {
 	deployService *services.DeployService
 	siteService   *services.SiteService
+	auditService  *services.AuditService
 }
 
-func NewDeployHandler(deployService *services.DeployService, siteService *services.SiteService) *DeployHandler {
+func NewDeployHandler(deployService *services.DeployService, siteService *services.SiteService, auditService *services.AuditService) *DeployHandler {
 	return &DeployHandler{
 		deployService: deployService,
 		siteService:   siteService,
+		auditService:  auditService,
 	}
 }
 
@@ -68,6 +70,13 @@ func (h *DeployHandler) Upload(c *gin.Context) {
 		return
 	}
 
+	// Log deploy
+	h.auditService.LogUser(user.ID, services.ActionDeploy, services.EntityDeploy, &deploy.ID, map[string]interface{}{
+		"filename": header.Filename,
+		"site_id":  siteID,
+		"size":     header.Size,
+	}, c.ClientIP())
+
 	if c.GetHeader("HX-Request") == "true" {
 		c.Header("HX-Redirect", "/sites/"+strconv.FormatInt(siteID, 10))
 		c.Status(http.StatusOK)
@@ -101,6 +110,9 @@ func (h *DeployHandler) Rollback(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "Rollback failed: %s", err.Error())
 		return
 	}
+
+	// Log rollback
+	h.auditService.LogUser(user.ID, services.ActionRollback, services.EntitySite, &siteID, nil, c.ClientIP())
 
 	if c.GetHeader("HX-Request") == "true" {
 		c.Header("HX-Redirect", "/sites/"+strconv.FormatInt(siteID, 10))

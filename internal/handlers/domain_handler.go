@@ -16,13 +16,15 @@ type DomainHandler struct {
 	domainRepo   *repository.DomainRepository
 	siteService  *services.SiteService
 	nginxService *services.NginxService
+	auditService *services.AuditService
 }
 
-func NewDomainHandler(domainRepo *repository.DomainRepository, siteService *services.SiteService, nginxService *services.NginxService) *DomainHandler {
+func NewDomainHandler(domainRepo *repository.DomainRepository, siteService *services.SiteService, nginxService *services.NginxService, auditService *services.AuditService) *DomainHandler {
 	return &DomainHandler{
 		domainRepo:   domainRepo,
 		siteService:  siteService,
 		nginxService: nginxService,
+		auditService: auditService,
 	}
 }
 
@@ -72,6 +74,12 @@ func (h *DomainHandler) Create(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "Error creating domain")
 		return
 	}
+
+	// Log domain creation
+	h.auditService.LogUser(user.ID, services.ActionDomainAdd, services.EntityDomain, &domain.ID, map[string]interface{}{
+		"hostname": hostname,
+		"site_id":  siteID,
+	}, c.ClientIP())
 
 	// Regenerate nginx config
 	if err := h.nginxService.ApplyConfig(siteID); err != nil {
@@ -125,10 +133,18 @@ func (h *DomainHandler) Delete(c *gin.Context) {
 		return
 	}
 
+	hostname := domain.Hostname
+
 	if err := h.domainRepo.Delete(domainID); err != nil {
 		c.String(http.StatusInternalServerError, "Error deleting domain")
 		return
 	}
+
+	// Log domain deletion
+	h.auditService.LogUser(user.ID, services.ActionDomainDelete, services.EntityDomain, &domainID, map[string]interface{}{
+		"hostname": hostname,
+		"site_id":  siteID,
+	}, c.ClientIP())
 
 	// Check if there are remaining domains
 	remainingDomains, _ := h.domainRepo.ListBySite(siteID)
@@ -193,6 +209,12 @@ func (h *DomainHandler) SetPrimary(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "Error setting primary domain")
 		return
 	}
+
+	// Log primary domain change
+	h.auditService.LogUser(user.ID, services.ActionDomainPrimary, services.EntityDomain, &domainID, map[string]interface{}{
+		"hostname": domain.Hostname,
+		"site_id":  siteID,
+	}, c.ClientIP())
 
 	// Regenerate nginx config
 	if err := h.nginxService.ApplyConfig(siteID); err != nil {

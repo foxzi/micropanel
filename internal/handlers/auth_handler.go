@@ -11,11 +11,15 @@ import (
 )
 
 type AuthHandler struct {
-	authService *services.AuthService
+	authService  *services.AuthService
+	auditService *services.AuditService
 }
 
-func NewAuthHandler(authService *services.AuthService) *AuthHandler {
-	return &AuthHandler{authService: authService}
+func NewAuthHandler(authService *services.AuthService, auditService *services.AuditService) *AuthHandler {
+	return &AuthHandler{
+		authService:  authService,
+		auditService: auditService,
+	}
 }
 
 func (h *AuthHandler) LoginPage(c *gin.Context) {
@@ -27,15 +31,22 @@ func (h *AuthHandler) LoginPage(c *gin.Context) {
 func (h *AuthHandler) Login(c *gin.Context) {
 	email := c.PostForm("email")
 	password := c.PostForm("password")
+	ip := c.ClientIP()
 
 	session, err := h.authService.Login(email, password)
 	if err != nil {
+		// Log failed login attempt
+		h.auditService.LogAnonymous(services.ActionLoginFailed, services.EntityUser, map[string]string{"email": email}, ip)
+
 		csrfToken := middleware.GetCSRFToken(c)
 		c.Writer.WriteHeader(http.StatusUnauthorized)
 		component := pages.Login(csrfToken, "Invalid email or password")
 		component.Render(c.Request.Context(), c.Writer)
 		return
 	}
+
+	// Log successful login
+	h.auditService.LogUser(session.UserID, services.ActionLogin, services.EntityUser, &session.UserID, nil, ip)
 
 	c.SetCookie(
 		services.SessionCookieKey,
@@ -58,9 +69,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
+	user := middleware.GetUser(c)
+	ip := c.ClientIP()
+
 	sessionID, err := c.Cookie(services.SessionCookieKey)
 	if err == nil {
 		h.authService.Logout(sessionID)
+	}
+
+	// Log logout
+	if user != nil {
+		h.auditService.LogUser(user.ID, services.ActionLogout, services.EntityUser, &user.ID, nil, ip)
 	}
 
 	c.SetCookie(services.SessionCookieKey, "", -1, "/", "", false, true)

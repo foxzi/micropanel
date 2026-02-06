@@ -13,12 +13,14 @@ import (
 type RedirectHandler struct {
 	redirectService *services.RedirectService
 	siteService     *services.SiteService
+	auditService    *services.AuditService
 }
 
-func NewRedirectHandler(redirectService *services.RedirectService, siteService *services.SiteService) *RedirectHandler {
+func NewRedirectHandler(redirectService *services.RedirectService, siteService *services.SiteService, auditService *services.AuditService) *RedirectHandler {
 	return &RedirectHandler{
 		redirectService: redirectService,
 		siteService:     siteService,
+		auditService:    auditService,
 	}
 }
 
@@ -63,11 +65,17 @@ func (h *RedirectHandler) Create(c *gin.Context) {
 		}
 	}
 
-	_, err = h.redirectService.Create(siteID, sourcePath, targetURL, code, preservePath, preserveQuery, priority)
+	redirect, err := h.redirectService.Create(siteID, sourcePath, targetURL, code, preservePath, preserveQuery, priority)
 	if err != nil {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
+
+	h.auditService.LogUser(user.ID, services.ActionRedirectAdd, services.EntityRedirect, &redirect.ID, map[string]interface{}{
+		"source_path": sourcePath,
+		"target_url":  targetURL,
+		"site_id":     siteID,
+	}, c.ClientIP())
 
 	if c.GetHeader("HX-Request") == "true" {
 		c.Header("HX-Redirect", "/sites/"+strconv.FormatInt(siteID, 10))
@@ -138,6 +146,8 @@ func (h *RedirectHandler) Update(c *gin.Context) {
 		return
 	}
 
+	h.auditService.LogUser(user.ID, services.ActionRedirectEdit, services.EntityRedirect, &redirectID, nil, c.ClientIP())
+
 	if c.GetHeader("HX-Request") == "true" {
 		c.Header("HX-Redirect", "/sites/"+strconv.FormatInt(siteID, 10))
 		c.Status(http.StatusOK)
@@ -188,6 +198,8 @@ func (h *RedirectHandler) Delete(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "Failed to delete redirect")
 		return
 	}
+
+	h.auditService.LogUser(user.ID, services.ActionRedirectDel, services.EntityRedirect, &redirectID, nil, c.ClientIP())
 
 	if c.GetHeader("HX-Request") == "true" {
 		c.Header("HX-Redirect", "/sites/"+strconv.FormatInt(siteID, 10))

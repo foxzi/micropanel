@@ -11,14 +11,16 @@ import (
 )
 
 type SSLHandler struct {
-	sslService  *services.SSLService
-	siteService *services.SiteService
+	sslService   *services.SSLService
+	siteService  *services.SiteService
+	auditService *services.AuditService
 }
 
-func NewSSLHandler(sslService *services.SSLService, siteService *services.SiteService) *SSLHandler {
+func NewSSLHandler(sslService *services.SSLService, siteService *services.SiteService, auditService *services.AuditService) *SSLHandler {
 	return &SSLHandler{
-		sslService:  sslService,
-		siteService: siteService,
+		sslService:   sslService,
+		siteService:  siteService,
+		auditService: auditService,
 	}
 }
 
@@ -47,6 +49,9 @@ func (h *SSLHandler) Issue(c *gin.Context) {
 		return
 	}
 
+	// Log SSL issue
+	h.auditService.LogUser(user.ID, services.ActionSSLIssue, services.EntitySite, &siteID, nil, c.ClientIP())
+
 	if c.GetHeader("HX-Request") == "true" {
 		c.Header("HX-Redirect", "/sites/"+strconv.FormatInt(siteID, 10))
 		c.Status(http.StatusOK)
@@ -69,6 +74,9 @@ func (h *SSLHandler) Renew(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "SSL renewal failed: %s", err.Error())
 		return
 	}
+
+	// Log SSL renewal
+	h.auditService.LogUser(user.ID, services.ActionSSLRenew, services.EntitySite, nil, nil, c.ClientIP())
 
 	c.JSON(http.StatusOK, gin.H{"message": "Certificates renewed"})
 }

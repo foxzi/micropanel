@@ -13,12 +13,14 @@ import (
 type AuthZoneHandler struct {
 	authZoneService *services.AuthZoneService
 	siteService     *services.SiteService
+	auditService    *services.AuditService
 }
 
-func NewAuthZoneHandler(authZoneService *services.AuthZoneService, siteService *services.SiteService) *AuthZoneHandler {
+func NewAuthZoneHandler(authZoneService *services.AuthZoneService, siteService *services.SiteService, auditService *services.AuditService) *AuthZoneHandler {
 	return &AuthZoneHandler{
 		authZoneService: authZoneService,
 		siteService:     siteService,
+		auditService:    auditService,
 	}
 }
 
@@ -48,11 +50,16 @@ func (h *AuthZoneHandler) Create(c *gin.Context) {
 		realm = "Restricted"
 	}
 
-	_, err = h.authZoneService.Create(siteID, pathPrefix, realm)
+	zone, err := h.authZoneService.Create(siteID, pathPrefix, realm)
 	if err != nil {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
+
+	h.auditService.LogUser(user.ID, services.ActionAuthZoneAdd, services.EntityAuthZone, &zone.ID, map[string]interface{}{
+		"path_prefix": pathPrefix,
+		"site_id":     siteID,
+	}, c.ClientIP())
 
 	if c.GetHeader("HX-Request") == "true" {
 		c.Header("HX-Redirect", "/sites/"+strconv.FormatInt(siteID, 10))

@@ -12,14 +12,16 @@ import (
 )
 
 type FileHandler struct {
-	fileService *services.FileService
-	siteService *services.SiteService
+	fileService  *services.FileService
+	siteService  *services.SiteService
+	auditService *services.AuditService
 }
 
-func NewFileHandler(fileService *services.FileService, siteService *services.SiteService) *FileHandler {
+func NewFileHandler(fileService *services.FileService, siteService *services.SiteService, auditService *services.AuditService) *FileHandler {
 	return &FileHandler{
-		fileService: fileService,
-		siteService: siteService,
+		fileService:  fileService,
+		siteService:  siteService,
+		auditService: auditService,
 	}
 }
 
