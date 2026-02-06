@@ -59,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User management (admin): list, create, edit, block/unblock, delete
 - User profile page with password change
 - SSL auto-renewal scripts (systemd timer/cron)
+- SSL status color-coded indicators (valid/expiring/expired)
 
 ### Changed
 - License changed to GPL-3.0

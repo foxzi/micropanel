@@ -4,6 +4,7 @@ import (
 	"micropanel/internal/models"
 	"micropanel/internal/templates/layouts"
 	"fmt"
+	"time"
 )
 
 script showModal(id string) {
@@ -158,15 +159,21 @@ templ SiteView(user *models.User, site *models.Site, deploys []*models.Deploy, r
 					</button>
 				</div>
 				if hasSSL(site.Domains) {
-					<div class="bg-green-50 border border-green-200 rounded p-4">
-						<p class="text-green-800 font-medium">SSL is active</p>
-						<p class="text-green-600 text-sm mt-1">
-							for _, domain := range site.Domains {
-								if domain.SSLEnabled && domain.SSLExpiresAt != nil {
-									Expires: { domain.SSLExpiresAt.Format("2006-01-02") }
-								}
+					<div class="space-y-2">
+						for _, domain := range site.Domains {
+							if domain.SSLEnabled && domain.SSLExpiresAt != nil {
+								<div class={ sslStatusClass(domain) }>
+									<div class="flex justify-between items-center">
+										<span class="font-medium">{ domain.Hostname }</span>
+										<span class={ sslBadgeClass(domain) }>{ sslStatusText(domain) }</span>
+									</div>
+									<p class="text-sm mt-1">
+										Expires: { domain.SSLExpiresAt.Format("2006-01-02 15:04") }
+										<span class="text-gray-500 ml-2">({ daysUntilExpiry(domain) })</span>
+									</p>
+								</div>
 							}
-						</p>
+						}
 					</div>
 				} else {
 					<div class="bg-yellow-50 border border-yellow-200 rounded p-4">
@@ -640,4 +647,63 @@ func hasSSL(domains []models.Domain) bool {
 		}
 	}
 	return false
+}
+
+func sslStatusClass(domain models.Domain) string {
+	if domain.SSLExpiresAt == nil {
+		return "bg-yellow-50 border border-yellow-200 rounded p-4"
+	}
+	days := int(domain.SSLExpiresAt.Sub(time.Now()).Hours() / 24)
+	if days <= 7 {
+		return "bg-red-50 border border-red-200 rounded p-4"
+	}
+	if days <= 30 {
+		return "bg-yellow-50 border border-yellow-200 rounded p-4"
+	}
+	return "bg-green-50 border border-green-200 rounded p-4"
+}
+
+func sslBadgeClass(domain models.Domain) string {
+	if domain.SSLExpiresAt == nil {
+		return "px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded"
+	}
+	days := int(domain.SSLExpiresAt.Sub(time.Now()).Hours() / 24)
+	if days <= 7 {
+		return "px-2 py-1 text-xs bg-red-100 text-red-800 rounded"
+	}
+	if days <= 30 {
+		return "px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded"
+	}
+	return "px-2 py-1 text-xs bg-green-100 text-green-800 rounded"
+}
+
+func sslStatusText(domain models.Domain) string {
+	if domain.SSLExpiresAt == nil {
+		return "Unknown"
+	}
+	days := int(domain.SSLExpiresAt.Sub(time.Now()).Hours() / 24)
+	if days <= 0 {
+		return "Expired"
+	}
+	if days <= 7 {
+		return "Expiring Soon"
+	}
+	if days <= 30 {
+		return "Expiring"
+	}
+	return "Valid"
+}
+
+func daysUntilExpiry(domain models.Domain) string {
+	if domain.SSLExpiresAt == nil {
+		return "unknown"
+	}
+	days := int(domain.SSLExpiresAt.Sub(time.Now()).Hours() / 24)
+	if days <= 0 {
+		return "expired"
+	}
+	if days == 1 {
+		return "1 day left"
+	}
+	return fmt.Sprintf("%d days left", days)
 }
