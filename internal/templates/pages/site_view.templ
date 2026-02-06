@@ -6,7 +6,15 @@ import (
 	"fmt"
 )
 
-templ SiteView(user *models.User, site *models.Site, deploys []*models.Deploy, canRollback bool, csrfToken string) {
+script showModal(id string) {
+	document.getElementById(id).classList.remove('hidden')
+}
+
+script hideModal(id string) {
+	document.getElementById(id).classList.add('hidden')
+}
+
+templ SiteView(user *models.User, site *models.Site, deploys []*models.Deploy, redirects []*models.Redirect, authZones []*models.AuthZone, canRollback bool, csrfToken string) {
 	@layouts.Base(site.Name, user) {
 		<div class="mb-6">
 			<a href="/" class="text-blue-600 hover:text-blue-900">&larr; Back to Dashboard</a>
@@ -171,6 +179,159 @@ templ SiteView(user *models.User, site *models.Site, deploys []*models.Deploy, c
 
 		<div class="bg-white rounded-lg shadow p-6 mb-6">
 			<div class="flex justify-between items-center mb-4">
+				<h2 class="text-xl font-bold">Redirects</h2>
+				<button
+					onclick="document.getElementById('add-redirect-modal').classList.remove('hidden')"
+					class="bg-blue-500 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded"
+				>
+					Add Redirect
+				</button>
+			</div>
+			if len(redirects) == 0 {
+				<p class="text-gray-500">No redirects configured.</p>
+			} else {
+				<ul class="divide-y divide-gray-200">
+					for _, redirect := range redirects {
+						<li class="py-3">
+							<div class="flex justify-between items-center">
+								<div class="flex items-center space-x-2">
+									<span class="font-medium">{ redirect.SourcePath }</span>
+									<span class="text-gray-400">→</span>
+									<span class="text-gray-600">{ redirect.TargetURL }</span>
+									<span class="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded">{ fmt.Sprintf("%d", redirect.Code) }</span>
+									if redirect.PreservePath {
+										<span class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">+path</span>
+									}
+									if redirect.PreserveQuery {
+										<span class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">+query</span>
+									}
+									if !redirect.IsEnabled {
+										<span class="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">Disabled</span>
+									}
+								</div>
+								<div class="flex space-x-2">
+									<button
+										hx-post={ fmt.Sprintf("/sites/%d/redirects/%d/toggle", site.ID, redirect.ID) }
+										hx-swap="none"
+										hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
+										class="text-blue-600 hover:text-blue-900 text-sm"
+									>
+										if redirect.IsEnabled {
+											Disable
+										} else {
+											Enable
+										}
+									</button>
+									<button
+										hx-delete={ fmt.Sprintf("/sites/%d/redirects/%d", site.ID, redirect.ID) }
+										hx-confirm="Delete this redirect?"
+										hx-swap="none"
+										hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
+										class="text-red-600 hover:text-red-900 text-sm"
+									>
+										Delete
+									</button>
+								</div>
+							</div>
+						</li>
+					}
+				</ul>
+			}
+		</div>
+
+		@addRedirectModal(site.ID, csrfToken)
+
+		<div class="bg-white rounded-lg shadow p-6 mb-6">
+			<div class="flex justify-between items-center mb-4">
+				<h2 class="text-xl font-bold">Basic Auth Zones</h2>
+				<button
+					onclick="document.getElementById('add-auth-zone-modal').classList.remove('hidden')"
+					class="bg-blue-500 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded"
+				>
+					Add Auth Zone
+				</button>
+			</div>
+			if len(authZones) == 0 {
+				<p class="text-gray-500">No auth zones configured.</p>
+			} else {
+				<ul class="divide-y divide-gray-200">
+					for _, zone := range authZones {
+						<li class="py-3">
+							<div class="flex justify-between items-center mb-2">
+								<div class="flex items-center space-x-2">
+									<span class="font-medium">{ zone.PathPrefix }</span>
+									<span class="text-gray-500 text-sm">({ zone.Realm })</span>
+									if !zone.IsEnabled {
+										<span class="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">Disabled</span>
+									}
+								</div>
+								<div class="flex space-x-2">
+									<button
+										hx-post={ fmt.Sprintf("/sites/%d/auth-zones/%d/toggle", site.ID, zone.ID) }
+										hx-swap="none"
+										hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
+										class="text-blue-600 hover:text-blue-900 text-sm"
+									>
+										if zone.IsEnabled {
+											Disable
+										} else {
+											Enable
+										}
+									</button>
+									<button
+										hx-delete={ fmt.Sprintf("/sites/%d/auth-zones/%d", site.ID, zone.ID) }
+										hx-confirm="Delete this auth zone?"
+										hx-swap="none"
+										hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
+										class="text-red-600 hover:text-red-900 text-sm"
+									>
+										Delete
+									</button>
+								</div>
+							</div>
+							<div class="ml-4">
+								<div class="flex items-center space-x-2 mb-2">
+									<span class="text-sm text-gray-500">Users:</span>
+									if len(zone.Users) == 0 {
+										<span class="text-sm text-gray-400">No users</span>
+									}
+								</div>
+								if len(zone.Users) > 0 {
+									<div class="flex flex-wrap gap-2 mb-2">
+										for _, authUser := range zone.Users {
+											<span class="inline-flex items-center px-2 py-1 text-xs bg-gray-100 rounded">
+												{ authUser.Username }
+												<button
+													hx-delete={ fmt.Sprintf("/sites/%d/auth-zones/%d/users/%d", site.ID, zone.ID, authUser.ID) }
+													hx-confirm={ fmt.Sprintf("Delete user %s?", authUser.Username) }
+													hx-swap="none"
+													hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
+													class="ml-1 text-red-500 hover:text-red-700"
+												>
+													&times;
+												</button>
+											</span>
+										}
+									</div>
+								}
+								<button
+									onclick={ showModal(fmt.Sprintf("add-auth-user-modal-%d", zone.ID)) }
+									class="text-blue-600 hover:text-blue-900 text-sm"
+								>
+									+ Add User
+								</button>
+							</div>
+						</li>
+						@addAuthUserModal(site.ID, zone.ID, csrfToken)
+					}
+				</ul>
+			}
+		</div>
+
+		@addAuthZoneModal(site.ID, csrfToken)
+
+		<div class="bg-white rounded-lg shadow p-6 mb-6">
+			<div class="flex justify-between items-center mb-4">
 				<h2 class="text-xl font-bold">Deploy</h2>
 				if canRollback {
 					<button
@@ -266,6 +427,183 @@ templ addDomainModal(siteID int64, csrfToken string) {
 					<button
 						type="button"
 						onclick="document.getElementById('add-domain-modal').classList.add('hidden')"
+						class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded"
+					>
+						Cancel
+					</button>
+					<button
+						type="submit"
+						class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+					>
+						Add
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+}
+
+templ addRedirectModal(siteID int64, csrfToken string) {
+	<div id="add-redirect-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+		<div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+			<div class="flex justify-between items-center mb-4">
+				<h3 class="text-lg font-bold">Add Redirect</h3>
+				<button
+					onclick="document.getElementById('add-redirect-modal').classList.add('hidden')"
+					class="text-gray-500 hover:text-gray-700"
+				>
+					&times;
+				</button>
+			</div>
+			<form hx-post={ fmt.Sprintf("/sites/%d/redirects", siteID) } hx-swap="none">
+				<input type="hidden" name="_csrf" value={ csrfToken }/>
+				<div class="mb-4">
+					<label class="block text-gray-700 text-sm font-bold mb-2">Source Path</label>
+					<input
+						type="text"
+						name="source_path"
+						required
+						class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+						placeholder="/old-page"
+					/>
+				</div>
+				<div class="mb-4">
+					<label class="block text-gray-700 text-sm font-bold mb-2">Target URL</label>
+					<input
+						type="text"
+						name="target_url"
+						required
+						class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+						placeholder="https://example.com/new-page"
+					/>
+				</div>
+				<div class="mb-4">
+					<label class="block text-gray-700 text-sm font-bold mb-2">Redirect Code</label>
+					<select name="code" class="shadow border rounded w-full py-2 px-3 text-gray-700">
+						<option value="301">301 (Permanent)</option>
+						<option value="302">302 (Temporary)</option>
+					</select>
+				</div>
+				<div class="mb-4 space-y-2">
+					<label class="flex items-center">
+						<input type="checkbox" name="preserve_path" class="mr-2"/>
+						<span class="text-gray-700 text-sm">Preserve path</span>
+					</label>
+					<label class="flex items-center">
+						<input type="checkbox" name="preserve_query" class="mr-2"/>
+						<span class="text-gray-700 text-sm">Preserve query string</span>
+					</label>
+				</div>
+				<div class="flex justify-end space-x-2">
+					<button
+						type="button"
+						onclick="document.getElementById('add-redirect-modal').classList.add('hidden')"
+						class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded"
+					>
+						Cancel
+					</button>
+					<button
+						type="submit"
+						class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+					>
+						Add
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+}
+
+templ addAuthZoneModal(siteID int64, csrfToken string) {
+	<div id="add-auth-zone-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+		<div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+			<div class="flex justify-between items-center mb-4">
+				<h3 class="text-lg font-bold">Add Auth Zone</h3>
+				<button
+					onclick="document.getElementById('add-auth-zone-modal').classList.add('hidden')"
+					class="text-gray-500 hover:text-gray-700"
+				>
+					&times;
+				</button>
+			</div>
+			<form hx-post={ fmt.Sprintf("/sites/%d/auth-zones", siteID) } hx-swap="none">
+				<input type="hidden" name="_csrf" value={ csrfToken }/>
+				<div class="mb-4">
+					<label class="block text-gray-700 text-sm font-bold mb-2">Path Prefix</label>
+					<input
+						type="text"
+						name="path_prefix"
+						required
+						class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+						placeholder="/admin"
+					/>
+				</div>
+				<div class="mb-4">
+					<label class="block text-gray-700 text-sm font-bold mb-2">Realm</label>
+					<input
+						type="text"
+						name="realm"
+						class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+						placeholder="Restricted Area"
+						value="Restricted"
+					/>
+				</div>
+				<div class="flex justify-end space-x-2">
+					<button
+						type="button"
+						onclick="document.getElementById('add-auth-zone-modal').classList.add('hidden')"
+						class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded"
+					>
+						Cancel
+					</button>
+					<button
+						type="submit"
+						class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+					>
+						Add
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+}
+
+templ addAuthUserModal(siteID int64, zoneID int64, csrfToken string) {
+	<div id={ fmt.Sprintf("add-auth-user-modal-%d", zoneID) } class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+		<div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+			<div class="flex justify-between items-center mb-4">
+				<h3 class="text-lg font-bold">Add User</h3>
+				<button
+					onclick={ hideModal(fmt.Sprintf("add-auth-user-modal-%d", zoneID)) }
+					class="text-gray-500 hover:text-gray-700"
+				>
+					&times;
+				</button>
+			</div>
+			<form hx-post={ fmt.Sprintf("/sites/%d/auth-zones/%d/users", siteID, zoneID) } hx-swap="none">
+				<input type="hidden" name="_csrf" value={ csrfToken }/>
+				<div class="mb-4">
+					<label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
+					<input
+						type="text"
+						name="username"
+						required
+						class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+					/>
+				</div>
+				<div class="mb-4">
+					<label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+					<input
+						type="password"
+						name="password"
+						required
+						class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+					/>
+				</div>
+				<div class="flex justify-end space-x-2">
+					<button
+						type="button"
+						onclick={ hideModal(fmt.Sprintf("add-auth-user-modal-%d", zoneID)) }
 						class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded"
 					>
 						Cancel
