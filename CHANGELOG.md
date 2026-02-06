@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Text file editing with syntax-aware extensions
 - Image preview support
 - File manager UI with tree navigation
+- Audit logging system with action tracking
+- Audit log repository and service
+- Audit log UI for admins
+- Configurable limits (ZIP size, file size, upload size, sites per user)
+- Audit logging integration for all handlers
 
 ### Changed
 - License changed to GPL-3.0
