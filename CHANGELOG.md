@@ -23,3 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User model with roles (admin/user)
 - Session management with automatic extension
 - Installation documentation (RU/EN)
+- Domain management (add, delete, set primary)
+- Nginx config generation service
+- Nginx site config template with SSL support
+- Nginx reload with config validation and rollback
