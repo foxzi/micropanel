@@ -1,3 +1,4 @@
+# Build and release DEB/RPM packages
 name: Release
 
 on:
