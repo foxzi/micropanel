@@ -13,6 +13,14 @@ type Config struct {
 	Sites    SitesConfig    `yaml:"sites"`
 	Nginx    NginxConfig    `yaml:"nginx"`
 	SSL      SSLConfig      `yaml:"ssl"`
+	Limits   LimitsConfig   `yaml:"limits"`
+}
+
+type LimitsConfig struct {
+	MaxZipSize      int64 `yaml:"max_zip_size"`       // bytes
+	MaxFileSize     int64 `yaml:"max_file_size"`      // bytes
+	MaxUploadSize   int64 `yaml:"max_upload_size"`    // bytes
+	MaxSitesPerUser int   `yaml:"max_sites_per_user"` // 0 = unlimited
 }
 
 type SSLConfig struct {
@@ -60,6 +68,12 @@ func Load() (*Config, error) {
 			Email:   "",
 			Staging: false,
 		},
+		Limits: LimitsConfig{
+			MaxZipSize:      100 * 1024 * 1024, // 100MB
+			MaxFileSize:     5 * 1024 * 1024,   // 5MB
+			MaxUploadSize:   10 * 1024 * 1024,  // 10MB
+			MaxSitesPerUser: 0,                 // unlimited
+		},
 	}
 
 	// Load from YAML if exists
@@ -95,6 +109,26 @@ func Load() (*Config, error) {
 	}
 	if sslStaging := os.Getenv("SSL_STAGING"); sslStaging == "true" {
 		cfg.SSL.Staging = true
+	}
+	if maxZip := os.Getenv("MAX_ZIP_SIZE"); maxZip != "" {
+		if v, err := strconv.ParseInt(maxZip, 10, 64); err == nil {
+			cfg.Limits.MaxZipSize = v
+		}
+	}
+	if maxFile := os.Getenv("MAX_FILE_SIZE"); maxFile != "" {
+		if v, err := strconv.ParseInt(maxFile, 10, 64); err == nil {
+			cfg.Limits.MaxFileSize = v
+		}
+	}
+	if maxUpload := os.Getenv("MAX_UPLOAD_SIZE"); maxUpload != "" {
+		if v, err := strconv.ParseInt(maxUpload, 10, 64); err == nil {
+			cfg.Limits.MaxUploadSize = v
+		}
+	}
+	if maxSites := os.Getenv("MAX_SITES_PER_USER"); maxSites != "" {
+		if v, err := strconv.Atoi(maxSites); err == nil {
+			cfg.Limits.MaxSitesPerUser = v
+		}
 	}
 
 	return cfg, nil
