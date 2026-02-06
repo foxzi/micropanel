@@ -1,0 +1,14 @@
+app:
+  env: development
+  port: 8080
+  secret: change-me-in-production
+
+database:
+  path: ./data/micropanel.db
+
+sites:
+  path: /var/www/panel/sites
+
+nginx:
+  config_path: /etc/nginx/sites-enabled
+  reload_cmd: nginx -s reload
