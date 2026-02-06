@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User profile page with password change
 - SSL auto-renewal scripts (systemd timer/cron)
 - SSL status color-coded indicators (valid/expiring/expired)
+- GitHub Actions CI/CD for building and releasing packages
+- GitHub Pages download page with installation instructions
 - CLI commands for user management (list, create, delete, reset-password)
 - CLI commands for site management (list, create, delete, enable, disable)
 - DEB and RPM package building via nfpm
