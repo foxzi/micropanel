@@ -69,8 +69,13 @@ contents:
     file_info:
       mode: 0644
 
-  - src: docs/
-    dst: /usr/share/doc/micropanel/docs/
+  - src: docs/en/
+    dst: /usr/share/doc/micropanel/en/
+    file_info:
+      mode: 0644
+
+  - src: docs/ru/
+    dst: /usr/share/doc/micropanel/ru/
     file_info:
       mode: 0644
 
