@@ -41,16 +41,19 @@ func main() {
 	sessionRepo := repository.NewSessionRepository(db)
 	siteRepo := repository.NewSiteRepository(db)
 	domainRepo := repository.NewDomainRepository(db)
+	deployRepo := repository.NewDeployRepository(db)
 
 	// Initialize services
 	authService := services.NewAuthService(userRepo, sessionRepo)
 	siteService := services.NewSiteService(siteRepo, domainRepo, cfg)
 	nginxService := services.NewNginxService(cfg, siteRepo, domainRepo)
+	deployService := services.NewDeployService(cfg, deployRepo, siteRepo)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
-	siteHandler := handlers.NewSiteHandler(siteService)
+	siteHandler := handlers.NewSiteHandler(siteService, deployService)
 	domainHandler := handlers.NewDomainHandler(domainRepo, siteService, nginxService)
+	deployHandler := handlers.NewDeployHandler(deployService, siteService)
 
 	// Setup Gin
 	if !cfg.IsDevelopment() {
@@ -84,6 +87,10 @@ func main() {
 		protected.POST("/sites/:id/domains", domainHandler.Create)
 		protected.DELETE("/sites/:id/domains/:domainId", domainHandler.Delete)
 		protected.POST("/sites/:id/domains/:domainId/primary", domainHandler.SetPrimary)
+
+		// Deploy routes
+		protected.POST("/sites/:id/deploy", deployHandler.Upload)
+		protected.POST("/sites/:id/rollback", deployHandler.Rollback)
 	}
 
 	// Graceful shutdown

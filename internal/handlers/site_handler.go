@@ -12,11 +12,15 @@ import (
 )
 
 type SiteHandler struct {
-	siteService *services.SiteService
+	siteService   *services.SiteService
+	deployService *services.DeployService
 }
 
-func NewSiteHandler(siteService *services.SiteService) *SiteHandler {
-	return &SiteHandler{siteService: siteService}
+func NewSiteHandler(siteService *services.SiteService, deployService *services.DeployService) *SiteHandler {
+	return &SiteHandler{
+		siteService:   siteService,
+		deployService: deployService,
+	}
 }
 
 func (h *SiteHandler) Dashboard(c *gin.Context) {
@@ -79,7 +83,11 @@ func (h *SiteHandler) View(c *gin.Context) {
 		return
 	}
 
-	component := pages.SiteView(user, site, csrfToken)
+	// Get deploy history
+	deploys, _ := h.deployService.ListDeploys(id, 10)
+	canRollback := h.deployService.HasPreviousVersion(id)
+
+	component := pages.SiteView(user, site, deploys, canRollback, csrfToken)
 	component.Render(c.Request.Context(), c.Writer)
 }
 
