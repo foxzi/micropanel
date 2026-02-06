@@ -44,8 +44,10 @@ func main() {
 	deployRepo := repository.NewDeployRepository(db)
 	redirectRepo := repository.NewRedirectRepository(db)
 	authZoneRepo := repository.NewAuthZoneRepository(db)
+	auditRepo := repository.NewAuditRepository(db)
 
 	// Initialize services
+	auditService := services.NewAuditService(auditRepo)
 	authService := services.NewAuthService(userRepo, sessionRepo)
 	siteService := services.NewSiteService(siteRepo, domainRepo, cfg)
 	nginxService := services.NewNginxService(cfg, siteRepo, domainRepo)
@@ -58,14 +60,15 @@ func main() {
 	fileService := services.NewFileService(cfg)
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(authService)
-	siteHandler := handlers.NewSiteHandler(siteService, deployService, redirectService, authZoneService)
-	domainHandler := handlers.NewDomainHandler(domainRepo, siteService, nginxService)
-	deployHandler := handlers.NewDeployHandler(deployService, siteService)
-	sslHandler := handlers.NewSSLHandler(sslService, siteService)
-	redirectHandler := handlers.NewRedirectHandler(redirectService, siteService)
-	authZoneHandler := handlers.NewAuthZoneHandler(authZoneService, siteService)
-	fileHandler := handlers.NewFileHandler(fileService, siteService)
+	authHandler := handlers.NewAuthHandler(authService, auditService)
+	siteHandler := handlers.NewSiteHandler(siteService, deployService, redirectService, authZoneService, auditService)
+	domainHandler := handlers.NewDomainHandler(domainRepo, siteService, nginxService, auditService)
+	deployHandler := handlers.NewDeployHandler(deployService, siteService, auditService)
+	sslHandler := handlers.NewSSLHandler(sslService, siteService, auditService)
+	redirectHandler := handlers.NewRedirectHandler(redirectService, siteService, auditService)
+	authZoneHandler := handlers.NewAuthZoneHandler(authZoneService, siteService, auditService)
+	fileHandler := handlers.NewFileHandler(fileService, siteService, auditService)
+	auditHandler := handlers.NewAuditHandler(auditService, userRepo)
 
 	// Setup Gin
 	if !cfg.IsDevelopment() {
@@ -134,6 +137,10 @@ func main() {
 		protected.GET("/sites/:id/files/download", fileHandler.Download)
 		protected.GET("/sites/:id/files/preview", fileHandler.Preview)
 		protected.GET("/sites/:id/files/info", fileHandler.Info)
+
+		// Audit routes (admin only)
+		protected.GET("/audit", auditHandler.List)
+		protected.GET("/api/audit", auditHandler.ListAPI)
 	}
 
 	// Graceful shutdown
