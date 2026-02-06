@@ -1,0 +1,13 @@
+[Unit]
+Description=MicroPanel SSL Certificate Renewal
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/micropanel/scripts/ssl-renew.sh
+Environment=MICROPANEL_URL=http://localhost:8080
+# Set API key in /etc/micropanel/ssl-renew.env
+EnvironmentFile=-/etc/micropanel/ssl-renew.env
+
+[Install]
+WantedBy=multi-user.target
