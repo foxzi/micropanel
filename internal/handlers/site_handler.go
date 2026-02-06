@@ -12,14 +12,18 @@ import (
 )
 
 type SiteHandler struct {
-	siteService   *services.SiteService
-	deployService *services.DeployService
+	siteService     *services.SiteService
+	deployService   *services.DeployService
+	redirectService *services.RedirectService
+	authZoneService *services.AuthZoneService
 }
 
-func NewSiteHandler(siteService *services.SiteService, deployService *services.DeployService) *SiteHandler {
+func NewSiteHandler(siteService *services.SiteService, deployService *services.DeployService, redirectService *services.RedirectService, authZoneService *services.AuthZoneService) *SiteHandler {
 	return &SiteHandler{
-		siteService:   siteService,
-		deployService: deployService,
+		siteService:     siteService,
+		deployService:   deployService,
+		redirectService: redirectService,
+		authZoneService: authZoneService,
 	}
 }
 
@@ -87,7 +91,13 @@ func (h *SiteHandler) View(c *gin.Context) {
 	deploys, _ := h.deployService.ListDeploys(id, 10)
 	canRollback := h.deployService.HasPreviousVersion(id)
 
-	component := pages.SiteView(user, site, deploys, canRollback, csrfToken)
+	// Get redirects
+	redirects, _ := h.redirectService.ListBySite(id)
+
+	// Get auth zones with users
+	authZones, _ := h.authZoneService.ListBySiteWithUsers(id)
+
+	component := pages.SiteView(user, site, deploys, redirects, authZones, canRollback, csrfToken)
 	component.Render(c.Request.Context(), c.Writer)
 }
 
