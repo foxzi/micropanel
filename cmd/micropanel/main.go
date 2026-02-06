@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -69,6 +70,7 @@ func main() {
 	authZoneHandler := handlers.NewAuthZoneHandler(authZoneService, siteService, auditService)
 	fileHandler := handlers.NewFileHandler(fileService, siteService, auditService)
 	auditHandler := handlers.NewAuditHandler(auditService, userRepo)
+	userHandler := handlers.NewUserHandler(userRepo, auditService)
 
 	// Setup Gin
 	if !cfg.IsDevelopment() {
@@ -76,6 +78,10 @@ func main() {
 	}
 
 	r := gin.Default()
+
+	// Rate limiters
+	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 login attempts per minute
+	apiLimiter := middleware.NewRateLimiter(100, time.Minute)   // 100 API requests per minute
 
 	// Global middleware
 	r.Use(middleware.CSRF())
@@ -85,11 +91,12 @@ func main() {
 
 	// Public routes
 	r.GET("/login", authHandler.LoginPage)
-	r.POST("/login", authHandler.Login)
+	r.POST("/login", loginLimiter.Middleware(), authHandler.Login)
 
 	// Protected routes
 	protected := r.Group("/")
 	protected.Use(middleware.Auth(authService))
+	protected.Use(apiLimiter.Middleware())
 	{
 		protected.POST("/logout", authHandler.Logout)
 		protected.GET("/", siteHandler.Dashboard)
@@ -141,6 +148,17 @@ func main() {
 		// Audit routes (admin only)
 		protected.GET("/audit", auditHandler.List)
 		protected.GET("/api/audit", auditHandler.ListAPI)
+
+		// User management routes (admin only)
+		protected.GET("/users", userHandler.List)
+		protected.POST("/users", userHandler.Create)
+		protected.POST("/users/:id", userHandler.Update)
+		protected.POST("/users/:id/toggle", userHandler.ToggleActive)
+		protected.DELETE("/users/:id", userHandler.Delete)
+
+		// Profile routes
+		protected.GET("/profile", userHandler.Profile)
+		protected.POST("/profile/password", userHandler.ChangePassword)
 	}
 
 	// Graceful shutdown
