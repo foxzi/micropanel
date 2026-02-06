@@ -14,9 +14,11 @@ import (
 )
 
 type NginxService struct {
-	config     *config.Config
-	siteRepo   *repository.SiteRepository
-	domainRepo *repository.DomainRepository
+	config       *config.Config
+	siteRepo     *repository.SiteRepository
+	domainRepo   *repository.DomainRepository
+	redirectRepo *repository.RedirectRepository
+	authZoneRepo *repository.AuthZoneRepository
 }
 
 func NewNginxService(cfg *config.Config, siteRepo *repository.SiteRepository, domainRepo *repository.DomainRepository) *NginxService {
@@ -25,6 +27,14 @@ func NewNginxService(cfg *config.Config, siteRepo *repository.SiteRepository, do
 		siteRepo:   siteRepo,
 		domainRepo: domainRepo,
 	}
+}
+
+func (s *NginxService) SetRedirectRepo(repo *repository.RedirectRepository) {
+	s.redirectRepo = repo
+}
+
+func (s *NginxService) SetAuthZoneRepo(repo *repository.AuthZoneRepository) {
+	s.authZoneRepo = repo
 }
 
 const nginxSiteTemplate = `# Site: {{.Site.Name}} (ID: {{.Site.ID}})
@@ -52,7 +62,20 @@ server {
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
     }
-
+{{range .Redirects}}{{if .IsEnabled}}
+    # Redirect: {{.SourcePath}} -> {{.TargetURL}}
+    location {{.SourcePath}} {
+        return {{.Code}} {{.TargetURL}}{{if .PreservePath}}$uri{{end}}{{if .PreserveQuery}}$is_args$args{{end}};
+    }
+{{end}}{{end}}
+{{range .AuthZones}}{{if .IsEnabled}}
+    # Auth Zone: {{.PathPrefix}}
+    location {{.PathPrefix}} {
+        auth_basic "{{.Realm}}";
+        auth_basic_user_file {{$.AuthPath}}/zone_{{.ID}}.htpasswd;
+        try_files $uri $uri/ =404;
+    }
+{{end}}{{end}}
     location / {
         try_files $uri $uri/ =404;
     }
@@ -91,7 +114,20 @@ server {
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
-
+{{range .Redirects}}{{if .IsEnabled}}
+    # Redirect: {{.SourcePath}} -> {{.TargetURL}}
+    location {{.SourcePath}} {
+        return {{.Code}} {{.TargetURL}}{{if .PreservePath}}$uri{{end}}{{if .PreserveQuery}}$is_args$args{{end}};
+    }
+{{end}}{{end}}
+{{range .AuthZones}}{{if .IsEnabled}}
+    # Auth Zone: {{.PathPrefix}}
+    location {{.PathPrefix}} {
+        auth_basic "{{.Realm}}";
+        auth_basic_user_file {{$.AuthPath}}/zone_{{.ID}}.htpasswd;
+        try_files $uri $uri/ =404;
+    }
+{{end}}{{end}}
     location / {
         try_files $uri $uri/ =404;
     }
@@ -106,8 +142,11 @@ server {
 type nginxTemplateData struct {
 	Site          *models.Site
 	Domains       []*models.Domain
+	Redirects     []*models.Redirect
+	AuthZones     []*models.AuthZone
 	PublicPath    string
 	LogPath       string
+	AuthPath      string
 	HasSSL        bool
 	PrimaryDomain string
 }
@@ -127,6 +166,24 @@ func (s *NginxService) GenerateConfig(siteID int64) (string, error) {
 		return "", fmt.Errorf("site has no domains")
 	}
 
+	// Get redirects if repo is set
+	var redirects []*models.Redirect
+	if s.redirectRepo != nil {
+		redirects, err = s.redirectRepo.ListBySite(siteID)
+		if err != nil {
+			return "", fmt.Errorf("get redirects: %w", err)
+		}
+	}
+
+	// Get auth zones if repo is set
+	var authZones []*models.AuthZone
+	if s.authZoneRepo != nil {
+		authZones, err = s.authZoneRepo.ListBySite(siteID)
+		if err != nil {
+			return "", fmt.Errorf("get auth zones: %w", err)
+		}
+	}
+
 	// Find primary domain
 	primaryDomain := domains[0].Hostname
 	hasSSL := false
@@ -139,11 +196,16 @@ func (s *NginxService) GenerateConfig(siteID int64) (string, error) {
 		}
 	}
 
+	sitePath := filepath.Join(s.config.Sites.Path, fmt.Sprintf("%d", siteID))
+
 	data := nginxTemplateData{
 		Site:          site,
 		Domains:       domains,
-		PublicPath:    filepath.Join(s.config.Sites.Path, fmt.Sprintf("%d", siteID), "public"),
-		LogPath:       filepath.Join(s.config.Sites.Path, fmt.Sprintf("%d", siteID), "logs"),
+		Redirects:     redirects,
+		AuthZones:     authZones,
+		PublicPath:    filepath.Join(sitePath, "public"),
+		LogPath:       filepath.Join(sitePath, "logs"),
+		AuthPath:      filepath.Join(sitePath, "auth"),
 		HasSSL:        hasSSL,
 		PrimaryDomain: primaryDomain,
 	}
