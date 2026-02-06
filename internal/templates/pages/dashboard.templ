@@ -12,6 +12,7 @@ templ Dashboard(user *models.User, sites []*models.Site, csrfToken string) {
 			<div class="mb-6 bg-gray-100 rounded-lg p-4">
 				<h2 class="text-lg font-bold mb-2">Admin</h2>
 				<div class="flex space-x-4">
+					<a href="/users" class="text-blue-600 hover:text-blue-900">Users</a>
 					<a href="/audit" class="text-blue-600 hover:text-blue-900">Audit Log</a>
 				</div>
 			</div>
