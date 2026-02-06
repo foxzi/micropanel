@@ -1,7 +1,7 @@
 app:
-  env: development
-  port: 8080
-  secret: change-me-in-production
+  env: development        # development / production
+  port: 8080              # HTTP port for panel
+  secret: change-me-in-production  # Session secret (min 32 chars)
 
 database:
   path: ./data/micropanel.db
@@ -12,3 +12,13 @@ sites:
 nginx:
   config_path: /etc/nginx/sites-enabled
   reload_cmd: nginx -s reload
+
+ssl:
+  email: admin@example.com  # Let's Encrypt notifications
+  staging: false            # true = use staging LE server (for testing)
+
+limits:
+  max_zip_size: 104857600       # 100MB
+  max_file_size: 5242880        # 5MB
+  max_upload_size: 10485760     # 10MB
+  max_sites_per_user: 0         # 0 = unlimited
