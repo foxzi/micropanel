@@ -49,3 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Text file editing with syntax-aware extensions
 - Image preview support
 - File manager UI with tree navigation
+
+### Changed
+- License changed to GPL-3.0

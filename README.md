@@ -74,4 +74,4 @@ See [docs/](docs/) for detailed documentation.
 
 ## License
 
-MIT
+GPL-3.0
