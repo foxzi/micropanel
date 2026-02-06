@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (without v prefix)'
+        required: true
+        default: '1.0.0'
 
 permissions:
   contents: write
@@ -34,7 +40,12 @@ jobs:
 
       - name: Get version
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build binary
         env:
@@ -74,7 +85,12 @@ jobs:
 
       - name: Get version
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -102,7 +118,12 @@ jobs:
 
       - name: Get version
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
