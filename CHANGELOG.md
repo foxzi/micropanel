@@ -43,3 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auth zone user management with bcrypt
 - htpasswd file generation
 - Nginx config integration for redirects and auth
+- File manager service with sandbox protection
+- File CRUD operations (create, read, write, delete, rename)
+- File upload and download
+- Text file editing with syntax-aware extensions
+- Image preview support
+- File manager UI with tree navigation
