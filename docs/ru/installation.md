@@ -17,9 +17,6 @@ echo "deb [trusted=yes] https://foxzi.github.io/micropanel/apt stable main" | su
 # Установите пакет
 sudo apt update
 sudo apt install micropanel
-
-# Запустите сервис
-sudo systemctl enable --now micropanel
 ```
 
 ### CentOS/RHEL (RPM)
@@ -27,10 +24,9 @@ sudo systemctl enable --now micropanel
 ```bash
 # Скачайте и установите пакет
 sudo dnf install https://foxzi.github.io/micropanel/rpm/micropanel-1.2.0-1.x86_64.rpm
-
-# Запустите сервис
-sudo systemctl enable --now micropanel
 ```
+
+После установки выполните настройку (см. ниже).
 
 ## Настройка после установки
 
@@ -59,8 +55,10 @@ sudo systemctl enable --now micropanel
 ```yaml
 app:
   env: production
+  host: 127.0.0.1
   port: 8080
   secret: auto-generated-on-install
+  panel_domain: panel.example.com
 
 database:
   path: /var/lib/micropanel/micropanel.db

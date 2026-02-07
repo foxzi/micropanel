@@ -17,9 +17,6 @@ echo "deb [trusted=yes] https://foxzi.github.io/micropanel/apt stable main" | su
 # Install package
 sudo apt update
 sudo apt install micropanel
-
-# Start service
-sudo systemctl enable --now micropanel
 ```
 
 ### CentOS/RHEL (RPM)
@@ -27,10 +24,9 @@ sudo systemctl enable --now micropanel
 ```bash
 # Download and install package
 sudo dnf install https://foxzi.github.io/micropanel/rpm/micropanel-1.2.0-1.x86_64.rpm
-
-# Start service
-sudo systemctl enable --now micropanel
 ```
+
+After installation, complete the setup (see below).
 
 ## Post-Installation Setup
 
