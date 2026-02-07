@@ -100,18 +100,22 @@ func runSiteList(cmd *cobra.Command, args []string) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tOWNER\tENABLED\tDOMAINS\tCREATED")
+	fmt.Fprintln(w, "ID\tDOMAIN\tOWNER\tENABLED\tSSL\tWWW\tCREATED")
 	for _, s := range sites {
 		enabled := "yes"
 		if !s.IsEnabled {
 			enabled = "no"
 		}
-		domains := "-"
-		if len(s.Domains) > 0 {
-			domains = fmt.Sprintf("%d", len(s.Domains))
+		ssl := "no"
+		if s.SSLEnabled {
+			ssl = "yes"
 		}
-		fmt.Fprintf(w, "%d\t%s\t%d\t%s\t%s\t%s\n",
-			s.ID, s.Name, s.OwnerID, enabled, domains, s.CreatedAt.Format("2006-01-02 15:04"))
+		www := "no"
+		if s.WWWAlias {
+			www = "yes"
+		}
+		fmt.Fprintf(w, "%d\t%s\t%d\t%s\t%s\t%s\t%s\n",
+			s.ID, s.Name, s.OwnerID, enabled, ssl, www, s.CreatedAt.Format("2006-01-02 15:04"))
 	}
 	w.Flush()
 }

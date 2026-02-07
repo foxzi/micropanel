@@ -6,6 +6,10 @@ import (
 	"fmt"
 )
 
+script initFileManagerScript(siteID int64, csrfToken string) {
+	initFileManager(siteID, csrfToken);
+}
+
 templ Files(user *models.User, site *models.Site, csrfToken string) {
 	@layouts.Base("Files - " + site.Name, user) {
 		<div class="mb-6">
@@ -207,8 +211,6 @@ templ Files(user *models.User, site *models.Site, csrfToken string) {
 		</div>
 
 		<script src="/static/js/files.js"></script>
-		<script>
-			initFileManager({ fmt.Sprintf("%d", site.ID) }, '{ csrfToken }');
-		</script>
+		@initFileManagerScript(site.ID, csrfToken)
 	}
 }

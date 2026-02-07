@@ -12,52 +12,63 @@ import (
 	"time"
 
 	"micropanel/internal/config"
+	"micropanel/internal/models"
 	"micropanel/internal/repository"
 )
 
 var (
-	ErrCertbotFailed   = errors.New("certbot command failed")
-	ErrNoDomains       = errors.New("no domains configured for site")
-	ErrCertNotFound    = errors.New("certificate not found")
-	ErrDomainNotFound  = errors.New("domain not found")
+	ErrCertbotFailed  = errors.New("certbot command failed")
+	ErrNoDomains      = errors.New("no domains configured for site")
+	ErrCertNotFound   = errors.New("certificate not found")
+	ErrDomainNotFound = errors.New("domain not found")
 )
 
 type SSLService struct {
 	config       *config.Config
+	siteRepo     *repository.SiteRepository
 	domainRepo   *repository.DomainRepository
 	nginxService *NginxService
 }
 
-func NewSSLService(cfg *config.Config, domainRepo *repository.DomainRepository, nginxService *NginxService) *SSLService {
+func NewSSLService(cfg *config.Config, siteRepo *repository.SiteRepository, domainRepo *repository.DomainRepository, nginxService *NginxService) *SSLService {
 	return &SSLService{
 		config:       cfg,
+		siteRepo:     siteRepo,
 		domainRepo:   domainRepo,
 		nginxService: nginxService,
 	}
 }
 
-// IssueCertificate requests a new SSL certificate for all domains of a site
+// IssueCertificate requests a new SSL certificate for site (primary domain + www + aliases)
 func (s *SSLService) IssueCertificate(siteID int64) error {
-	domains, err := s.domainRepo.ListBySite(siteID)
+	site, err := s.siteRepo.GetByID(siteID)
 	if err != nil {
-		return fmt.Errorf("list domains: %w", err)
+		return fmt.Errorf("get site: %w", err)
 	}
 
-	if len(domains) == 0 {
+	// Load aliases
+	aliases, err := s.domainRepo.ListBySite(siteID)
+	if err != nil {
+		return fmt.Errorf("list aliases: %w", err)
+	}
+	site.Aliases = make([]models.Domain, len(aliases))
+	for i, d := range aliases {
+		site.Aliases[i] = *d
+	}
+
+	// Get all hostnames for certificate
+	hostnames := site.GetAllHostnames()
+	if len(hostnames) == 0 {
 		return ErrNoDomains
 	}
 
-	// Build domain list for certbot
+	// Build domain args for certbot
 	var domainArgs []string
-	var primaryDomain string
-	for _, d := range domains {
-		domainArgs = append(domainArgs, "-d", d.Hostname)
-		if d.IsPrimary || primaryDomain == "" {
-			primaryDomain = d.Hostname
-		}
+	for _, h := range hostnames {
+		domainArgs = append(domainArgs, "-d", h)
 	}
 
-	// Run certbot
+	// Run certbot (cert-name is the primary domain)
 	args := []string{
 		"certonly",
 		"--webroot",
@@ -66,7 +77,7 @@ func (s *SSLService) IssueCertificate(siteID int64) error {
 		"--agree-tos",
 		"--no-eff-email",
 		"--non-interactive",
-		"--cert-name", primaryDomain,
+		"--cert-name", site.Name,
 	}
 
 	if s.config.SSL.Staging {
@@ -75,20 +86,18 @@ func (s *SSLService) IssueCertificate(siteID int64) error {
 
 	args = append(args, domainArgs...)
 
-	cmd := exec.Command("certbot", args...)
+	cmd := exec.Command("sudo", append([]string{"certbot"}, args...)...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrCertbotFailed, string(output))
 	}
 
-	// Update domain SSL status
-	expiresAt, _ := s.GetCertificateExpiry(primaryDomain)
-	for _, d := range domains {
-		d.SSLEnabled = true
-		d.SSLExpiresAt = expiresAt
-		if err := s.domainRepo.Update(d); err != nil {
-			return fmt.Errorf("update domain SSL status: %w", err)
-		}
+	// Update site SSL status
+	expiresAt, _ := s.GetCertificateExpiry(site.Name)
+	site.SSLEnabled = true
+	site.SSLExpiresAt = expiresAt
+	if err := s.siteRepo.Update(site); err != nil {
+		return fmt.Errorf("update site SSL status: %w", err)
 	}
 
 	// Regenerate nginx config with SSL
@@ -141,34 +150,34 @@ func (s *SSLService) GetCertificateInfo(domain string) (*CertificateInfo, error)
 	}
 
 	return &CertificateInfo{
-		Domain:    domain,
-		Issuer:    cert.Issuer.CommonName,
-		NotBefore: cert.NotBefore,
-		NotAfter:  cert.NotAfter,
-		DNSNames:  cert.DNSNames,
-		IsExpired: time.Now().After(cert.NotAfter),
+		Domain:          domain,
+		Issuer:          cert.Issuer.CommonName,
+		NotBefore:       cert.NotBefore,
+		NotAfter:        cert.NotAfter,
+		DNSNames:        cert.DNSNames,
+		IsExpired:       time.Now().After(cert.NotAfter),
 		DaysUntilExpiry: int(time.Until(cert.NotAfter).Hours() / 24),
 	}, nil
 }
 
-// CheckAndUpdateSSLStatus checks certificate status for a domain and updates DB
-func (s *SSLService) CheckAndUpdateSSLStatus(domainID int64) error {
-	domain, err := s.domainRepo.GetByID(domainID)
+// CheckAndUpdateSSLStatus checks certificate status for a site and updates DB
+func (s *SSLService) CheckAndUpdateSSLStatus(siteID int64) error {
+	site, err := s.siteRepo.GetByID(siteID)
 	if err != nil {
 		return err
 	}
 
-	expiresAt, err := s.GetCertificateExpiry(domain.Hostname)
+	expiresAt, err := s.GetCertificateExpiry(site.Name)
 	if err != nil {
 		// Certificate not found or invalid - mark as not SSL
-		domain.SSLEnabled = false
-		domain.SSLExpiresAt = nil
+		site.SSLEnabled = false
+		site.SSLExpiresAt = nil
 	} else {
-		domain.SSLEnabled = true
-		domain.SSLExpiresAt = expiresAt
+		site.SSLEnabled = true
+		site.SSLExpiresAt = expiresAt
 	}
 
-	return s.domainRepo.Update(domain)
+	return s.siteRepo.Update(site)
 }
 
 // RenewCertificates runs certbot renew for all certificates
@@ -179,7 +188,7 @@ func (s *SSLService) RenewCertificates() error {
 		args = append(args, "--staging")
 	}
 
-	cmd := exec.Command("certbot", args...)
+	cmd := exec.Command("sudo", append([]string{"certbot"}, args...)...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrCertbotFailed, string(output))
@@ -194,9 +203,14 @@ func (s *SSLService) RenewCertificates() error {
 	return nil
 }
 
-// RevokeCertificate revokes a certificate for a domain
-func (s *SSLService) RevokeCertificate(domain string) error {
-	certPath := filepath.Join("/etc/letsencrypt/live", domain, "cert.pem")
+// RevokeCertificate revokes a certificate for a site
+func (s *SSLService) RevokeCertificate(siteID int64) error {
+	site, err := s.siteRepo.GetByID(siteID)
+	if err != nil {
+		return err
+	}
+
+	certPath := filepath.Join("/etc/letsencrypt/live", site.Name, "cert.pem")
 
 	args := []string{
 		"revoke",
@@ -204,30 +218,50 @@ func (s *SSLService) RevokeCertificate(domain string) error {
 		"--non-interactive",
 	}
 
-	cmd := exec.Command("certbot", args...)
+	cmd := exec.Command("sudo", append([]string{"certbot"}, args...)...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrCertbotFailed, string(output))
+	}
+
+	// Update site SSL status
+	site.SSLEnabled = false
+	site.SSLExpiresAt = nil
+	if err := s.siteRepo.Update(site); err != nil {
+		return fmt.Errorf("update site SSL status: %w", err)
+	}
+
+	// Regenerate nginx config without SSL
+	if err := s.nginxService.ApplyConfig(siteID); err != nil {
+		return fmt.Errorf("apply nginx config: %w", err)
 	}
 
 	return nil
 }
 
-// DeleteCertificate deletes a certificate for a domain
-func (s *SSLService) DeleteCertificate(domain string) error {
+// DeleteCertificate deletes a certificate for a site
+func (s *SSLService) DeleteCertificate(siteID int64) error {
+	site, err := s.siteRepo.GetByID(siteID)
+	if err != nil {
+		return err
+	}
+
 	args := []string{
 		"delete",
-		"--cert-name", domain,
+		"--cert-name", site.Name,
 		"--non-interactive",
 	}
 
-	cmd := exec.Command("certbot", args...)
+	cmd := exec.Command("sudo", append([]string{"certbot"}, args...)...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrCertbotFailed, string(output))
 	}
 
-	return nil
+	// Update site SSL status
+	site.SSLEnabled = false
+	site.SSLExpiresAt = nil
+	return s.siteRepo.Update(site)
 }
 
 // CertificateInfo holds parsed certificate information

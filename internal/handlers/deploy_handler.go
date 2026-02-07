@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -53,8 +54,12 @@ func (h *DeployHandler) Upload(c *gin.Context) {
 	defer file.Close()
 
 	// Validate file extension
-	if len(header.Filename) < 4 || header.Filename[len(header.Filename)-4:] != ".zip" {
-		c.String(http.StatusBadRequest, "Only ZIP files are allowed")
+	filename := strings.ToLower(header.Filename)
+	validExt := strings.HasSuffix(filename, ".zip") ||
+		strings.HasSuffix(filename, ".tgz") ||
+		strings.HasSuffix(filename, ".tar.gz")
+	if !validExt {
+		c.String(http.StatusBadRequest, "Only ZIP and TGZ files are allowed")
 		return
 	}
 

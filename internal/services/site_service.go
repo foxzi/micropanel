@@ -29,6 +29,7 @@ func (s *SiteService) Create(name string, ownerID int64) (*models.Site, error) {
 		Name:      name,
 		OwnerID:   ownerID,
 		IsEnabled: true,
+		WWWAlias:  true, // www alias enabled by default
 	}
 
 	if err := s.siteRepo.Create(site); err != nil {
@@ -50,17 +51,21 @@ func (s *SiteService) GetByID(id int64) (*models.Site, error) {
 		return nil, err
 	}
 
-	// Load domains
-	domains, err := s.domainRepo.ListBySite(id)
+	// Load aliases
+	aliases, err := s.domainRepo.ListBySite(id)
 	if err != nil {
 		return nil, err
 	}
-	site.Domains = make([]models.Domain, len(domains))
-	for i, d := range domains {
-		site.Domains[i] = *d
+	site.Aliases = make([]models.Domain, len(aliases))
+	for i, d := range aliases {
+		site.Aliases[i] = *d
 	}
 
 	return site, nil
+}
+
+func (s *SiteService) GetByName(name string) (*models.Site, error) {
+	return s.siteRepo.GetByName(name)
 }
 
 func (s *SiteService) List(user *models.User) ([]*models.Site, error) {
@@ -68,6 +73,20 @@ func (s *SiteService) List(user *models.User) ([]*models.Site, error) {
 		return s.siteRepo.ListAll()
 	}
 	return s.siteRepo.ListByOwner(user.ID)
+}
+
+func (s *SiteService) ListPaginated(user *models.User, search string, page, limit int) ([]*models.Site, error) {
+	if user.IsAdmin() {
+		return s.siteRepo.ListAllPaginated(search, page, limit)
+	}
+	return s.siteRepo.ListByOwnerPaginated(user.ID, search, page, limit)
+}
+
+func (s *SiteService) Count(user *models.User, search string) (int, error) {
+	if user.IsAdmin() {
+		return s.siteRepo.CountAll(search)
+	}
+	return s.siteRepo.CountByOwner(user.ID, search)
 }
 
 func (s *SiteService) Update(site *models.Site) error {
@@ -100,7 +119,6 @@ func (s *SiteService) createSiteDirectories(siteID int64) error {
 	dirs := []string{
 		s.GetPublicPath(siteID),
 		filepath.Join(s.GetSitePath(siteID), "deploys"),
-		filepath.Join(s.GetSitePath(siteID), "logs"),
 	}
 
 	for _, dir := range dirs {

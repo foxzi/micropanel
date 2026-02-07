@@ -62,7 +62,7 @@ func runServe(cmd *cobra.Command, args []string) {
 	nginxService.SetRedirectRepo(redirectRepo)
 	nginxService.SetAuthZoneRepo(authZoneRepo)
 	deployService := services.NewDeployService(cfg, deployRepo, siteRepo)
-	sslService := services.NewSSLService(cfg, domainRepo, nginxService)
+	sslService := services.NewSSLService(cfg, siteRepo, domainRepo, nginxService)
 	redirectService := services.NewRedirectService(redirectRepo, nginxService)
 	authZoneService := services.NewAuthZoneService(cfg, authZoneRepo, nginxService)
 	fileService := services.NewFileService(cfg)
@@ -107,7 +107,6 @@ func runServe(cmd *cobra.Command, args []string) {
 
 		protected.POST("/sites/:id/domains", domainHandler.Create)
 		protected.DELETE("/sites/:id/domains/:domainId", domainHandler.Delete)
-		protected.POST("/sites/:id/domains/:domainId/primary", domainHandler.SetPrimary)
 
 		protected.POST("/sites/:id/deploy", deployHandler.Upload)
 		protected.POST("/sites/:id/rollback", deployHandler.Rollback)

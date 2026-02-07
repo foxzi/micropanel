@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"micropanel/internal/config"
@@ -44,14 +45,14 @@ server {
     listen 80;
     listen [::]:80;
 
-    server_name{{range .Domains}} {{.Hostname}}{{end}};
+    server_name {{.ServerNames}};
 
     root {{.PublicPath}};
     index index.html index.htm;
 
     # Logging
-    access_log {{.LogPath}}/access.log;
-    error_log {{.LogPath}}/error.log;
+    access_log /var/log/nginx/{{.LogName}}_access.log;
+    error_log /var/log/nginx/{{.LogName}}_error.log;
 
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -90,10 +91,10 @@ server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
 
-    server_name{{range .Domains}} {{.Hostname}}{{end}};
+    server_name {{.ServerNames}};
 
-    ssl_certificate /etc/letsencrypt/live/{{.PrimaryDomain}}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/{{.PrimaryDomain}}/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/{{.Site.Name}}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{.Site.Name}}/privkey.pem;
     ssl_session_timeout 1d;
     ssl_session_cache shared:SSL:50m;
     ssl_session_tickets off;
@@ -108,8 +109,8 @@ server {
     root {{.PublicPath}};
     index index.html index.htm;
 
-    access_log {{.LogPath}}/access.log;
-    error_log {{.LogPath}}/error.log;
+    access_log /var/log/nginx/{{.LogName}}_access.log;
+    error_log /var/log/nginx/{{.LogName}}_error.log;
 
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
@@ -140,15 +141,14 @@ server {
 `
 
 type nginxTemplateData struct {
-	Site          *models.Site
-	Domains       []*models.Domain
-	Redirects     []*models.Redirect
-	AuthZones     []*models.AuthZone
-	PublicPath    string
-	LogPath       string
-	AuthPath      string
-	HasSSL        bool
-	PrimaryDomain string
+	Site        *models.Site
+	ServerNames string
+	Redirects   []*models.Redirect
+	AuthZones   []*models.AuthZone
+	PublicPath  string
+	LogName     string
+	AuthPath    string
+	HasSSL      bool
 }
 
 func (s *NginxService) GenerateConfig(siteID int64) (string, error) {
@@ -157,14 +157,19 @@ func (s *NginxService) GenerateConfig(siteID int64) (string, error) {
 		return "", fmt.Errorf("get site: %w", err)
 	}
 
-	domains, err := s.domainRepo.ListBySite(siteID)
+	// Load aliases
+	aliases, err := s.domainRepo.ListBySite(siteID)
 	if err != nil {
-		return "", fmt.Errorf("get domains: %w", err)
+		return "", fmt.Errorf("get aliases: %w", err)
+	}
+	site.Aliases = make([]models.Domain, len(aliases))
+	for i, d := range aliases {
+		site.Aliases[i] = *d
 	}
 
-	if len(domains) == 0 {
-		return "", fmt.Errorf("site has no domains")
-	}
+	// Get all hostnames (primary + www + aliases)
+	hostnames := site.GetAllHostnames()
+	serverNames := strings.Join(hostnames, " ")
 
 	// Get redirects if repo is set
 	var redirects []*models.Redirect
@@ -184,30 +189,20 @@ func (s *NginxService) GenerateConfig(siteID int64) (string, error) {
 		}
 	}
 
-	// Find primary domain
-	primaryDomain := domains[0].Hostname
-	hasSSL := false
-	for _, d := range domains {
-		if d.IsPrimary {
-			primaryDomain = d.Hostname
-		}
-		if d.SSLEnabled {
-			hasSSL = true
-		}
-	}
-
 	sitePath := filepath.Join(s.config.Sites.Path, fmt.Sprintf("%d", siteID))
 
+	// Convert domain to log-safe name: example.com -> example_com
+	logName := strings.ReplaceAll(site.Name, ".", "_")
+
 	data := nginxTemplateData{
-		Site:          site,
-		Domains:       domains,
-		Redirects:     redirects,
-		AuthZones:     authZones,
-		PublicPath:    filepath.Join(sitePath, "public"),
-		LogPath:       filepath.Join(sitePath, "logs"),
-		AuthPath:      filepath.Join(sitePath, "auth"),
-		HasSSL:        hasSSL,
-		PrimaryDomain: primaryDomain,
+		Site:        site,
+		ServerNames: serverNames,
+		Redirects:   redirects,
+		AuthZones:   authZones,
+		PublicPath:  filepath.Join(sitePath, "public"),
+		LogName:     logName,
+		AuthPath:    filepath.Join(sitePath, "auth"),
+		HasSSL:      site.SSLEnabled,
 	}
 
 	tmpl, err := template.New("nginx").Parse(nginxSiteTemplate)
@@ -253,7 +248,7 @@ func (s *NginxService) RemoveConfig(siteID int64) error {
 }
 
 func (s *NginxService) TestConfig() error {
-	cmd := exec.Command("nginx", "-t")
+	cmd := exec.Command("sudo", "nginx", "-t")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("nginx test failed: %s", string(output))
@@ -267,7 +262,7 @@ func (s *NginxService) Reload() error {
 		return err
 	}
 
-	cmd := exec.Command("nginx", "-s", "reload")
+	cmd := exec.Command("sudo", "nginx", "-s", "reload")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("nginx reload failed: %s", string(output))

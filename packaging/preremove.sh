@@ -7,5 +7,8 @@ systemctl stop micropanel-ssl-renew.timer 2>/dev/null || true
 systemctl disable micropanel 2>/dev/null || true
 systemctl disable micropanel-ssl-renew.timer 2>/dev/null || true
 
+# Remove sudoers file
+rm -f /etc/sudoers.d/micropanel
+
 echo "MicroPanel services stopped."
 echo "Note: Data in /opt/micropanel/data and /var/www/panel/sites is preserved."

@@ -5,6 +5,14 @@ set -e
 chown -R micropanel:micropanel /opt/micropanel/data
 chown -R micropanel:micropanel /var/www/panel/sites
 
+# Create sudoers file for micropanel user
+cat > /etc/sudoers.d/micropanel <<EOF
+# Allow micropanel to run certbot and nginx without password
+micropanel ALL=(ALL) NOPASSWD: /usr/bin/certbot
+micropanel ALL=(ALL) NOPASSWD: /usr/sbin/nginx
+EOF
+chmod 440 /etc/sudoers.d/micropanel
+
 # Create config from example if not exists
 if [ ! -f /etc/micropanel/micropanel.env ]; then
     cat > /etc/micropanel/micropanel.env <<EOF

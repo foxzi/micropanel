@@ -37,6 +37,11 @@ templ SiteView(user *models.User, site *models.Site, deploys []*models.Deploy, r
 							Disabled
 						</span>
 					}
+					if site.SSLEnabled {
+						<span class="px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">
+							SSL
+						</span>
+					}
 				</div>
 			</div>
 
@@ -44,18 +49,34 @@ templ SiteView(user *models.User, site *models.Site, deploys []*models.Deploy, r
 				<input type="hidden" name="_csrf" value={ csrfToken }/>
 
 				<div>
-					<label for="name" class="block text-gray-700 text-sm font-bold mb-2">Site Name</label>
+					<label for="name" class="block text-gray-700 text-sm font-bold mb-2">Primary Domain</label>
 					<input
 						type="text"
 						id="name"
 						name="name"
 						value={ site.Name }
 						required
+						pattern="^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"
 						class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+						placeholder="example.com"
 					/>
+					<p class="text-gray-500 text-xs mt-1">This is your site's main domain</p>
 				</div>
 
-				<div>
+				<div class="space-y-2">
+					<label class="flex items-center">
+						<input
+							type="checkbox"
+							name="www_alias"
+							if site.WWWAlias {
+								checked
+							}
+							class="mr-2"
+						/>
+						<span class="text-gray-700 text-sm font-bold">Add www. alias</span>
+						<span class="text-gray-500 text-xs ml-2">(www.{ site.Name })</span>
+					</label>
+
 					<label class="flex items-center">
 						<input
 							type="checkbox"
@@ -92,50 +113,43 @@ templ SiteView(user *models.User, site *models.Site, deploys []*models.Deploy, r
 
 		<div class="bg-white rounded-lg shadow p-6 mb-6">
 			<div class="flex justify-between items-center mb-4">
-				<h2 class="text-xl font-bold">Domains</h2>
+				<h2 class="text-xl font-bold">Domain Aliases</h2>
 				<button
 					onclick="document.getElementById('add-domain-modal').classList.remove('hidden')"
 					class="bg-blue-500 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded"
 				>
-					Add Domain
+					Add Alias
 				</button>
 			</div>
-			if len(site.Domains) == 0 {
-				<p class="text-gray-500">No domains configured. Add a domain to make your site accessible.</p>
+
+			<div class="mb-4 p-3 bg-gray-50 rounded">
+				<p class="text-sm text-gray-600">
+					<strong>Active domains:</strong> { site.Name }
+					if site.WWWAlias {
+						, www.{ site.Name }
+					}
+					for _, alias := range site.Aliases {
+						, { alias.Hostname }
+					}
+				</p>
+			</div>
+
+			if len(site.Aliases) == 0 {
+				<p class="text-gray-500">No additional aliases configured.</p>
 			} else {
 				<ul class="divide-y divide-gray-200">
-					for _, domain := range site.Domains {
+					for _, alias := range site.Aliases {
 						<li class="py-3 flex justify-between items-center">
-							<div class="flex items-center">
-								<span class="font-medium">{ domain.Hostname }</span>
-								if domain.IsPrimary {
-									<span class="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">Primary</span>
-								}
-								if domain.SSLEnabled {
-									<span class="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 rounded">SSL</span>
-								}
-							</div>
-							<div class="flex space-x-2">
-								if !domain.IsPrimary {
-									<button
-										hx-post={ fmt.Sprintf("/sites/%d/domains/%d/primary", site.ID, domain.ID) }
-										hx-swap="none"
-										hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
-										class="text-blue-600 hover:text-blue-900 text-sm"
-									>
-										Set Primary
-									</button>
-								}
-								<button
-									hx-delete={ fmt.Sprintf("/sites/%d/domains/%d", site.ID, domain.ID) }
-									hx-confirm={ fmt.Sprintf("Delete domain %s?", domain.Hostname) }
-									hx-swap="none"
-									hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
-									class="text-red-600 hover:text-red-900 text-sm"
-								>
-									Delete
-								</button>
-							</div>
+							<span class="font-medium">{ alias.Hostname }</span>
+							<button
+								hx-delete={ fmt.Sprintf("/sites/%d/domains/%d", site.ID, alias.ID) }
+								hx-confirm={ fmt.Sprintf("Delete alias %s?", alias.Hostname) }
+								hx-swap="none"
+								hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
+								class="text-red-600 hover:text-red-900 text-sm"
+							>
+								Delete
+							</button>
 						</li>
 					}
 				</ul>
@@ -144,45 +158,46 @@ templ SiteView(user *models.User, site *models.Site, deploys []*models.Deploy, r
 
 		@addDomainModal(site.ID, csrfToken)
 
-		if len(site.Domains) > 0 {
-			<div class="bg-white rounded-lg shadow p-6 mb-6">
-				<div class="flex justify-between items-center mb-4">
-					<h2 class="text-xl font-bold">SSL Certificate</h2>
-					<button
-						hx-post={ fmt.Sprintf("/sites/%d/ssl/issue", site.ID) }
-						hx-confirm="Issue SSL certificate for all domains? This may take a moment."
-						hx-swap="none"
-						hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
-						class="bg-green-500 hover:bg-green-600 text-white text-sm font-bold py-1 px-3 rounded"
-					>
-						Issue/Renew SSL
-					</button>
-				</div>
-				if hasSSL(site.Domains) {
-					<div class="space-y-2">
-						for _, domain := range site.Domains {
-							if domain.SSLEnabled && domain.SSLExpiresAt != nil {
-								<div class={ sslStatusClass(domain) }>
-									<div class="flex justify-between items-center">
-										<span class="font-medium">{ domain.Hostname }</span>
-										<span class={ sslBadgeClass(domain) }>{ sslStatusText(domain) }</span>
-									</div>
-									<p class="text-sm mt-1">
-										Expires: { domain.SSLExpiresAt.Format("2006-01-02 15:04") }
-										<span class="text-gray-500 ml-2">({ daysUntilExpiry(domain) })</span>
-									</p>
-								</div>
-							}
-						}
-					</div>
-				} else {
-					<div class="bg-yellow-50 border border-yellow-200 rounded p-4">
-						<p class="text-yellow-800 font-medium">SSL not configured</p>
-						<p class="text-yellow-600 text-sm mt-1">Click "Issue/Renew SSL" to get a free Let's Encrypt certificate.</p>
-					</div>
-				}
+		<div class="bg-white rounded-lg shadow p-6 mb-6">
+			<div class="flex justify-between items-center mb-4">
+				<h2 class="text-xl font-bold">SSL Certificate</h2>
+				<button
+					hx-post={ fmt.Sprintf("/sites/%d/ssl/issue", site.ID) }
+					hx-confirm="Issue SSL certificate for all domains? This may take a moment."
+					hx-swap="none"
+					hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
+					class="bg-green-500 hover:bg-green-600 text-white text-sm font-bold py-1 px-3 rounded"
+				>
+					Issue/Renew SSL
+				</button>
 			</div>
-		}
+			if site.SSLEnabled && site.SSLExpiresAt != nil {
+				<div class={ sslStatusClass(site) }>
+					<div class="flex justify-between items-center">
+						<span class="font-medium">Certificate for { site.Name }</span>
+						<span class={ sslBadgeClass(site) }>{ sslStatusText(site) }</span>
+					</div>
+					<p class="text-sm mt-1">
+						Expires: { site.SSLExpiresAt.Format("2006-01-02 15:04") }
+						<span class="text-gray-500 ml-2">({ daysUntilExpiry(site) })</span>
+					</p>
+					<p class="text-sm text-gray-500 mt-2">
+						Covers: { site.Name }
+						if site.WWWAlias {
+							, www.{ site.Name }
+						}
+						for _, alias := range site.Aliases {
+							, { alias.Hostname }
+						}
+					</p>
+				</div>
+			} else {
+				<div class="bg-yellow-50 border border-yellow-200 rounded p-4">
+					<p class="text-yellow-800 font-medium">SSL not configured</p>
+					<p class="text-yellow-600 text-sm mt-1">Click "Issue/Renew SSL" to get a free Let's Encrypt certificate.</p>
+				</div>
+			}
+		</div>
 
 		<div class="bg-white rounded-lg shadow p-6 mb-6">
 			<div class="flex justify-between items-center mb-4">
@@ -365,7 +380,24 @@ templ SiteView(user *models.User, site *models.Site, deploys []*models.Deploy, r
 					</button>
 				}
 			</div>
-			<p class="text-gray-500 mb-4">Upload a ZIP file to deploy to this site.</p>
+			<p class="text-gray-500 mb-4">Upload a ZIP or TGZ archive to deploy to this site.</p>
+
+			<div class="bg-blue-50 border border-blue-200 rounded p-4 mb-4">
+				<p class="text-blue-800 font-medium text-sm mb-2">Archive requirements:</p>
+				<ul class="text-blue-700 text-sm list-disc list-inside space-y-1">
+					<li>Supported formats: .zip, .tgz, .tar.gz</li>
+					<li>Maximum archive size: 100 MB</li>
+					<li>Maximum file size: 10 MB per file</li>
+					<li>Maximum files: 10,000</li>
+					<li>Symlinks are not allowed</li>
+					<li>If all files are in one folder (e.g. <code class="bg-blue-100 px-1 rounded">dist/</code>), it will be stripped automatically</li>
+				</ul>
+				<p class="text-blue-600 text-xs mt-2">
+					ZIP: <code class="bg-blue-100 px-1 rounded">zip -r site.zip index.html css/ js/</code><br/>
+					TGZ: <code class="bg-blue-100 px-1 rounded">tar -czf site.tgz index.html css/ js/</code>
+				</p>
+			</div>
+
 			<form
 				hx-post={ fmt.Sprintf("/sites/%d/deploy", site.ID) }
 				hx-encoding="multipart/form-data"
@@ -376,7 +408,7 @@ templ SiteView(user *models.User, site *models.Site, deploys []*models.Deploy, r
 				<input
 					type="file"
 					name="file"
-					accept=".zip"
+					accept=".zip,.tgz,.tar.gz"
 					required
 					class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
 				/>
@@ -420,7 +452,7 @@ templ addDomainModal(siteID int64, csrfToken string) {
 	<div id="add-domain-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
 		<div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
 			<div class="flex justify-between items-center mb-4">
-				<h3 class="text-lg font-bold">Add Domain</h3>
+				<h3 class="text-lg font-bold">Add Domain Alias</h3>
 				<button
 					onclick="document.getElementById('add-domain-modal').classList.add('hidden')"
 					class="text-gray-500 hover:text-gray-700"
@@ -439,9 +471,9 @@ templ addDomainModal(siteID int64, csrfToken string) {
 						required
 						pattern="^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"
 						class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-						placeholder="example.com"
+						placeholder="alias.example.com"
 					/>
-					<p class="text-gray-500 text-xs mt-1">Enter domain without http:// or trailing slash</p>
+					<p class="text-gray-500 text-xs mt-1">Add an additional domain that points to this site</p>
 				</div>
 				<div class="flex justify-end space-x-2">
 					<button
@@ -640,20 +672,11 @@ templ addAuthUserModal(siteID int64, zoneID int64, csrfToken string) {
 	</div>
 }
 
-func hasSSL(domains []models.Domain) bool {
-	for _, d := range domains {
-		if d.SSLEnabled {
-			return true
-		}
-	}
-	return false
-}
-
-func sslStatusClass(domain models.Domain) string {
-	if domain.SSLExpiresAt == nil {
+func sslStatusClass(site *models.Site) string {
+	if site.SSLExpiresAt == nil {
 		return "bg-yellow-50 border border-yellow-200 rounded p-4"
 	}
-	days := int(domain.SSLExpiresAt.Sub(time.Now()).Hours() / 24)
+	days := int(site.SSLExpiresAt.Sub(time.Now()).Hours() / 24)
 	if days <= 7 {
 		return "bg-red-50 border border-red-200 rounded p-4"
 	}
@@ -663,11 +686,11 @@ func sslStatusClass(domain models.Domain) string {
 	return "bg-green-50 border border-green-200 rounded p-4"
 }
 
-func sslBadgeClass(domain models.Domain) string {
-	if domain.SSLExpiresAt == nil {
+func sslBadgeClass(site *models.Site) string {
+	if site.SSLExpiresAt == nil {
 		return "px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded"
 	}
-	days := int(domain.SSLExpiresAt.Sub(time.Now()).Hours() / 24)
+	days := int(site.SSLExpiresAt.Sub(time.Now()).Hours() / 24)
 	if days <= 7 {
 		return "px-2 py-1 text-xs bg-red-100 text-red-800 rounded"
 	}
@@ -677,11 +700,11 @@ func sslBadgeClass(domain models.Domain) string {
 	return "px-2 py-1 text-xs bg-green-100 text-green-800 rounded"
 }
 
-func sslStatusText(domain models.Domain) string {
-	if domain.SSLExpiresAt == nil {
+func sslStatusText(site *models.Site) string {
+	if site.SSLExpiresAt == nil {
 		return "Unknown"
 	}
-	days := int(domain.SSLExpiresAt.Sub(time.Now()).Hours() / 24)
+	days := int(site.SSLExpiresAt.Sub(time.Now()).Hours() / 24)
 	if days <= 0 {
 		return "Expired"
 	}
@@ -694,11 +717,11 @@ func sslStatusText(domain models.Domain) string {
 	return "Valid"
 }
 
-func daysUntilExpiry(domain models.Domain) string {
-	if domain.SSLExpiresAt == nil {
+func daysUntilExpiry(site *models.Site) string {
+	if site.SSLExpiresAt == nil {
 		return "unknown"
 	}
-	days := int(domain.SSLExpiresAt.Sub(time.Now()).Hours() / 24)
+	days := int(site.SSLExpiresAt.Sub(time.Now()).Hours() / 24)
 	if days <= 0 {
 		return "expired"
 	}

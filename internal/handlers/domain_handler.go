@@ -28,6 +28,7 @@ func NewDomainHandler(domainRepo *repository.DomainRepository, siteService *serv
 	}
 }
 
+// Create adds an alias domain to a site
 func (h *DomainHandler) Create(c *gin.Context) {
 	user := middleware.GetUser(c)
 
@@ -54,24 +55,25 @@ func (h *DomainHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Check if hostname is same as site name or www alias
+	if hostname == site.Name || hostname == "www."+site.Name {
+		c.String(http.StatusBadRequest, "Cannot add primary domain or www alias as alias")
+		return
+	}
+
 	// Check if domain already exists
 	if _, err := h.domainRepo.GetByHostname(hostname); err == nil {
 		c.String(http.StatusConflict, "Domain already exists")
 		return
 	}
 
-	// Check if this is the first domain (make it primary)
-	existingDomains, _ := h.domainRepo.ListBySite(siteID)
-	isPrimary := len(existingDomains) == 0
-
 	domain := &models.Domain{
-		SiteID:    siteID,
-		Hostname:  hostname,
-		IsPrimary: isPrimary,
+		SiteID:   siteID,
+		Hostname: hostname,
 	}
 
 	if err := h.domainRepo.Create(domain); err != nil {
-		c.String(http.StatusInternalServerError, "Error creating domain")
+		c.String(http.StatusInternalServerError, "Error creating domain alias")
 		return
 	}
 
@@ -83,7 +85,6 @@ func (h *DomainHandler) Create(c *gin.Context) {
 
 	// Regenerate nginx config
 	if err := h.nginxService.ApplyConfig(siteID); err != nil {
-		// Log error but don't fail - domain is created
 		c.Header("X-Nginx-Error", err.Error())
 	}
 
@@ -96,6 +97,7 @@ func (h *DomainHandler) Create(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/sites/"+strconv.FormatInt(siteID, 10))
 }
 
+// Delete removes an alias domain from a site
 func (h *DomainHandler) Delete(c *gin.Context) {
 	user := middleware.GetUser(c)
 
@@ -136,83 +138,13 @@ func (h *DomainHandler) Delete(c *gin.Context) {
 	hostname := domain.Hostname
 
 	if err := h.domainRepo.Delete(domainID); err != nil {
-		c.String(http.StatusInternalServerError, "Error deleting domain")
+		c.String(http.StatusInternalServerError, "Error deleting domain alias")
 		return
 	}
 
 	// Log domain deletion
 	h.auditService.LogUser(user.ID, services.ActionDomainDelete, services.EntityDomain, &domainID, map[string]interface{}{
 		"hostname": hostname,
-		"site_id":  siteID,
-	}, c.ClientIP())
-
-	// Check if there are remaining domains
-	remainingDomains, _ := h.domainRepo.ListBySite(siteID)
-	if len(remainingDomains) > 0 {
-		// Regenerate nginx config
-		if err := h.nginxService.ApplyConfig(siteID); err != nil {
-			c.Header("X-Nginx-Error", err.Error())
-		}
-	} else {
-		// Remove nginx config if no domains left
-		h.nginxService.RemoveConfig(siteID)
-		h.nginxService.Reload()
-	}
-
-	if c.GetHeader("HX-Request") == "true" {
-		c.Header("HX-Redirect", "/sites/"+strconv.FormatInt(siteID, 10))
-		c.Status(http.StatusOK)
-		return
-	}
-
-	c.Redirect(http.StatusFound, "/sites/"+strconv.FormatInt(siteID, 10))
-}
-
-func (h *DomainHandler) SetPrimary(c *gin.Context) {
-	user := middleware.GetUser(c)
-
-	siteID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		c.String(http.StatusBadRequest, "Invalid site ID")
-		return
-	}
-
-	domainID, err := strconv.ParseInt(c.Param("domainId"), 10, 64)
-	if err != nil {
-		c.String(http.StatusBadRequest, "Invalid domain ID")
-		return
-	}
-
-	site, err := h.siteService.GetByID(siteID)
-	if err != nil {
-		c.String(http.StatusNotFound, "Site not found")
-		return
-	}
-
-	if !h.siteService.CanAccess(site, user) {
-		c.String(http.StatusForbidden, "Access denied")
-		return
-	}
-
-	domain, err := h.domainRepo.GetByID(domainID)
-	if err != nil {
-		c.String(http.StatusNotFound, "Domain not found")
-		return
-	}
-
-	if domain.SiteID != siteID {
-		c.String(http.StatusForbidden, "Domain does not belong to this site")
-		return
-	}
-
-	if err := h.domainRepo.SetPrimary(siteID, domainID); err != nil {
-		c.String(http.StatusInternalServerError, "Error setting primary domain")
-		return
-	}
-
-	// Log primary domain change
-	h.auditService.LogUser(user.ID, services.ActionDomainPrimary, services.EntityDomain, &domainID, map[string]interface{}{
-		"hostname": domain.Hostname,
 		"site_id":  siteID,
 	}, c.ClientIP())
 

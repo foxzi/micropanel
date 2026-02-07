@@ -2,21 +2,88 @@ package pages
 
 templ Login(csrfToken string, errorMsg string) {
 	<!DOCTYPE html>
-	<html lang="en">
+	<html lang="en" class="light">
 	<head>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 		<title>Login - MicroPanel</title>
 		<script src="https://unpkg.com/htmx.org@1.9.10"></script>
 		<script src="https://cdn.tailwindcss.com"></script>
+		<script>
+			tailwind.config = {
+				darkMode: 'class',
+				theme: {
+					extend: {
+						colors: {
+							primary: {
+								50: '#eef2ff',
+								100: '#e0e7ff',
+								200: '#c7d2fe',
+								300: '#a5b4fc',
+								400: '#818cf8',
+								500: '#6366f1',
+								600: '#4f46e5',
+								700: '#4338ca',
+								800: '#3730a3',
+								900: '#312e81',
+							}
+						}
+					}
+				}
+			}
+		</script>
+		<script>
+			if (localStorage.getItem('theme') === 'dark' ||
+				(!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+				document.documentElement.classList.add('dark');
+				document.documentElement.classList.remove('light');
+			}
+
+			function toggleTheme() {
+				const html = document.documentElement;
+				if (html.classList.contains('dark')) {
+					html.classList.remove('dark');
+					html.classList.add('light');
+					localStorage.setItem('theme', 'light');
+				} else {
+					html.classList.add('dark');
+					html.classList.remove('light');
+					localStorage.setItem('theme', 'dark');
+				}
+			}
+		</script>
 	</head>
-	<body class="bg-gray-100 min-h-screen flex items-center justify-center">
-		<div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-			<h1 class="text-2xl font-bold text-center mb-6">MicroPanel</h1>
+	<body class="bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800 min-h-screen flex items-center justify-center p-4 transition-colors">
+		<div class="absolute top-4 right-4">
+			<button
+				onclick="toggleTheme()"
+				class="p-2 rounded-lg bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 shadow-md transition-colors"
+				title="Toggle theme"
+			>
+				<svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+				</svg>
+				<svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+				</svg>
+			</button>
+		</div>
+
+		<div class="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-200 dark:border-gray-700">
+			<div class="flex justify-center mb-6">
+				<div class="w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-700 rounded-2xl flex items-center justify-center shadow-lg">
+					<span class="text-white font-bold text-2xl">MP</span>
+				</div>
+			</div>
+			<h1 class="text-2xl font-bold text-center mb-2 text-gray-900 dark:text-white">Welcome back</h1>
+			<p class="text-gray-500 dark:text-gray-400 text-center mb-6">Sign in to MicroPanel</p>
 
 			if errorMsg != "" {
-				<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-					{ errorMsg }
+				<div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg mb-4 flex items-center space-x-2">
+					<svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+					</svg>
+					<span>{ errorMsg }</span>
 				</div>
 			}
 
@@ -24,36 +91,54 @@ templ Login(csrfToken string, errorMsg string) {
 				<input type="hidden" name="_csrf" value={ csrfToken }/>
 
 				<div class="mb-4">
-					<label for="email" class="block text-gray-700 text-sm font-bold mb-2">Email</label>
-					<input
-						type="email"
-						id="email"
-						name="email"
-						required
-						class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-						placeholder="admin@localhost"
-					/>
+					<label for="email" class="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Email</label>
+					<div class="relative">
+						<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+							<svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"></path>
+							</svg>
+						</div>
+						<input
+							type="email"
+							id="email"
+							name="email"
+							required
+							class="pl-10 w-full py-3 px-4 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+							placeholder="admin@localhost"
+						/>
+					</div>
 				</div>
 
 				<div class="mb-6">
-					<label for="password" class="block text-gray-700 text-sm font-bold mb-2">Password</label>
-					<input
-						type="password"
-						id="password"
-						name="password"
-						required
-						class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-						placeholder="********"
-					/>
+					<label for="password" class="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">Password</label>
+					<div class="relative">
+						<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+							<svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+							</svg>
+						</div>
+						<input
+							type="password"
+							id="password"
+							name="password"
+							required
+							class="pl-10 w-full py-3 px-4 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+							placeholder="********"
+						/>
+					</div>
 				</div>
 
 				<button
 					type="submit"
-					class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+					class="w-full bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-semibold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-all shadow-lg hover:shadow-xl"
 				>
 					Sign In
 				</button>
 			</form>
+
+			<p class="text-center text-gray-400 dark:text-gray-500 text-xs mt-6">
+				MicroPanel - Static Hosting Control Panel
+			</p>
 		</div>
 	</body>
 	</html>

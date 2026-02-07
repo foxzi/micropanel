@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- TGZ/tar.gz archive support for deploy (in addition to ZIP)
+- Dark theme support with system preference detection
+- Theme toggle button in navbar
+- Users and Audit Log links in navbar for admins
+- Improved UI design with modern styling
+- Sites list pagination (12 per page)
+- Sites search by domain name
 - Project structure initialization
 - Go module setup with Gin, Templ, HTMX stack
 - SQLite database with golang-migrate migrations
@@ -69,4 +76,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Packaging scripts (preinstall, postinstall, preremove)
 
 ### Changed
+- Nginx logs moved to /var/log/nginx/{domain}_access.log and {domain}_error.log
 - License changed to GPL-3.0
+- Simplified domain model: site name is now the primary domain (hostname)
+- Domains table renamed to aliases (additional domains for a site)
+- SSL certificate is now managed at site level instead of individual domains
+- Added www alias toggle (enabled by default) to automatically add www. prefix
+- Updated site view UI to show primary domain, www alias checkbox, and alias list
+- Updated nginx config generation to use site.GetAllHostnames() for server_name
+- Updated CLI site list to show SSL and WWW status
+- Added sudo for certbot and nginx commands to run under micropanel user
+- Postinstall creates /etc/sudoers.d/micropanel with NOPASSWD rules
+- Added ZIP archive requirements hint in deploy section UI

@@ -33,13 +33,27 @@ func (h *SiteHandler) Dashboard(c *gin.Context) {
 	user := middleware.GetUser(c)
 	csrfToken := middleware.GetCSRFToken(c)
 
-	sites, err := h.siteService.List(user)
+	// Pagination params
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	limit := 12
+	search := c.Query("search")
+
+	sites, err := h.siteService.ListPaginated(user, search, page, limit)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Error loading sites")
 		return
 	}
 
-	component := pages.Dashboard(user, sites, csrfToken)
+	total, _ := h.siteService.Count(user, search)
+	totalPages := (total + limit - 1) / limit
+	if totalPages < 1 {
+		totalPages = 1
+	}
+
+	component := pages.Dashboard(user, sites, csrfToken, search, page, totalPages, total)
 	component.Render(c.Request.Context(), c.Writer)
 }
 
@@ -130,9 +144,11 @@ func (h *SiteHandler) Update(c *gin.Context) {
 
 	oldName := site.Name
 	oldEnabled := site.IsEnabled
+	oldWWWAlias := site.WWWAlias
 
 	site.Name = c.PostForm("name")
 	site.IsEnabled = c.PostForm("is_enabled") == "on"
+	site.WWWAlias = c.PostForm("www_alias") == "on"
 
 	if err := h.siteService.Update(site); err != nil {
 		c.String(http.StatusInternalServerError, "Error updating site")
@@ -140,10 +156,11 @@ func (h *SiteHandler) Update(c *gin.Context) {
 	}
 
 	// Log site update
-	if oldName != site.Name || oldEnabled != site.IsEnabled {
+	if oldName != site.Name || oldEnabled != site.IsEnabled || oldWWWAlias != site.WWWAlias {
 		h.auditService.LogUser(user.ID, services.ActionSiteUpdate, services.EntitySite, &site.ID, map[string]interface{}{
 			"name":       site.Name,
 			"is_enabled": site.IsEnabled,
+			"www_alias":  site.WWWAlias,
 		}, ip)
 	}
 

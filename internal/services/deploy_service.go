@@ -1,7 +1,9 @@
 package services
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -16,19 +18,20 @@ import (
 )
 
 const (
-	MaxZipSize     = 100 * 1024 * 1024 // 100MB
+	MaxArchiveSize = 100 * 1024 * 1024 // 100MB
 	MaxFileSize    = 10 * 1024 * 1024  // 10MB per file
 	MaxFiles       = 10000
 	MaxPathLength  = 500
 )
 
 var (
-	ErrZipTooLarge     = errors.New("zip file too large")
-	ErrTooManyFiles    = errors.New("too many files in archive")
-	ErrPathTraversal   = errors.New("path traversal detected")
-	ErrInvalidPath     = errors.New("invalid file path")
-	ErrSymlinkDetected = errors.New("symlinks not allowed")
-	ErrFileTooLarge    = errors.New("file too large")
+	ErrArchiveTooLarge    = errors.New("archive file too large")
+	ErrTooManyFiles       = errors.New("too many files in archive")
+	ErrPathTraversal      = errors.New("path traversal detected")
+	ErrInvalidPath        = errors.New("invalid file path")
+	ErrSymlinkDetected    = errors.New("symlinks not allowed")
+	ErrFileTooLarge       = errors.New("file too large")
+	ErrUnsupportedArchive = errors.New("unsupported archive format")
 )
 
 type DeployService struct {
@@ -45,10 +48,10 @@ func NewDeployService(cfg *config.Config, deployRepo *repository.DeployRepositor
 	}
 }
 
-func (s *DeployService) Deploy(siteID, userID int64, filename string, zipReader io.Reader, size int64) (*models.Deploy, error) {
+func (s *DeployService) Deploy(siteID, userID int64, filename string, archiveReader io.Reader, size int64) (*models.Deploy, error) {
 	// Check size
-	if size > MaxZipSize {
-		return nil, ErrZipTooLarge
+	if size > MaxArchiveSize {
+		return nil, ErrArchiveTooLarge
 	}
 
 	// Create deploy record
@@ -63,7 +66,7 @@ func (s *DeployService) Deploy(siteID, userID int64, filename string, zipReader 
 	}
 
 	// Process deploy
-	if err := s.processDeploy(deploy, zipReader, size); err != nil {
+	if err := s.processDeploy(deploy, archiveReader, size); err != nil {
 		s.deployRepo.UpdateStatus(deploy.ID, models.DeployStatusFailed, err.Error())
 		deploy.Status = models.DeployStatusFailed
 		deploy.ErrorMessage = err.Error()
@@ -75,7 +78,7 @@ func (s *DeployService) Deploy(siteID, userID int64, filename string, zipReader 
 	return deploy, nil
 }
 
-func (s *DeployService) processDeploy(deploy *models.Deploy, zipReader io.Reader, size int64) error {
+func (s *DeployService) processDeploy(deploy *models.Deploy, archiveReader io.Reader, size int64) error {
 	sitePath := filepath.Join(s.config.Sites.Path, fmt.Sprintf("%d", deploy.SiteID))
 	publicPath := filepath.Join(sitePath, "public")
 	publicNewPath := filepath.Join(sitePath, "public_new")
@@ -89,33 +92,43 @@ func (s *DeployService) processDeploy(deploy *models.Deploy, zipReader io.Reader
 		}
 	}
 
-	// Save ZIP to deploys directory
-	zipFilename := fmt.Sprintf("%d_%s", time.Now().Unix(), deploy.Filename)
-	zipPath := filepath.Join(deploysPath, zipFilename)
+	// Save archive to deploys directory
+	archiveFilename := fmt.Sprintf("%d_%s", time.Now().Unix(), deploy.Filename)
+	archivePath := filepath.Join(deploysPath, archiveFilename)
 
-	zipFile, err := os.Create(zipPath)
+	archiveFile, err := os.Create(archivePath)
 	if err != nil {
-		return fmt.Errorf("create zip file: %w", err)
+		return fmt.Errorf("create archive file: %w", err)
 	}
 
-	written, err := io.Copy(zipFile, io.LimitReader(zipReader, MaxZipSize+1))
-	zipFile.Close()
+	written, err := io.Copy(archiveFile, io.LimitReader(archiveReader, MaxArchiveSize+1))
+	archiveFile.Close()
 	if err != nil {
-		os.Remove(zipPath)
-		return fmt.Errorf("save zip file: %w", err)
+		os.Remove(archivePath)
+		return fmt.Errorf("save archive file: %w", err)
 	}
-	if written > MaxZipSize {
-		os.Remove(zipPath)
-		return ErrZipTooLarge
+	if written > MaxArchiveSize {
+		os.Remove(archivePath)
+		return ErrArchiveTooLarge
 	}
 
 	// Clean up public_new if exists
 	os.RemoveAll(publicNewPath)
 
-	// Extract ZIP
-	if err := s.extractZip(zipPath, publicNewPath); err != nil {
+	// Extract archive based on file extension
+	var extractErr error
+	if s.isTarGz(deploy.Filename) {
+		extractErr = s.extractTarGz(archivePath, publicNewPath)
+	} else if s.isZip(deploy.Filename) {
+		extractErr = s.extractZip(archivePath, publicNewPath)
+	} else {
+		os.Remove(archivePath)
+		return ErrUnsupportedArchive
+	}
+
+	if extractErr != nil {
 		os.RemoveAll(publicNewPath)
-		return fmt.Errorf("extract zip: %w", err)
+		return fmt.Errorf("extract archive: %w", extractErr)
 	}
 
 	// Atomic swap
@@ -281,6 +294,164 @@ func (s *DeployService) validatePath(name string) error {
 	// Check for null bytes
 	if strings.ContainsRune(name, 0) {
 		return ErrInvalidPath
+	}
+
+	return nil
+}
+
+func (s *DeployService) isZip(filename string) bool {
+	return strings.HasSuffix(strings.ToLower(filename), ".zip")
+}
+
+func (s *DeployService) isTarGz(filename string) bool {
+	lower := strings.ToLower(filename)
+	return strings.HasSuffix(lower, ".tar.gz") || strings.HasSuffix(lower, ".tgz")
+}
+
+func (s *DeployService) extractTarGz(archivePath, destPath string) error {
+	file, err := os.Open(archivePath)
+	if err != nil {
+		return fmt.Errorf("open archive: %w", err)
+	}
+	defer file.Close()
+
+	gzReader, err := gzip.NewReader(file)
+	if err != nil {
+		return fmt.Errorf("create gzip reader: %w", err)
+	}
+	defer gzReader.Close()
+
+	tarReader := tar.NewReader(gzReader)
+
+	// Create destination directory
+	if err := os.MkdirAll(destPath, 0755); err != nil {
+		return err
+	}
+
+	// First pass: collect all entries to find common root and count files
+	var entries []tarEntry
+	fileCount := 0
+
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("read tar header: %w", err)
+		}
+
+		fileCount++
+		if fileCount > MaxFiles {
+			return ErrTooManyFiles
+		}
+
+		entries = append(entries, tarEntry{name: header.Name, header: header})
+	}
+
+	// Find common root
+	commonRoot := s.findCommonRootTar(entries)
+
+	// Reopen archive for extraction
+	file.Seek(0, 0)
+	gzReader2, err := gzip.NewReader(file)
+	if err != nil {
+		return fmt.Errorf("reopen gzip: %w", err)
+	}
+	defer gzReader2.Close()
+
+	tarReader2 := tar.NewReader(gzReader2)
+
+	for {
+		header, err := tarReader2.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("read tar header: %w", err)
+		}
+
+		if err := s.extractTarEntry(tarReader2, header, destPath, commonRoot); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+type tarEntry struct {
+	name   string
+	header *tar.Header
+}
+
+func (s *DeployService) findCommonRootTar(entries []tarEntry) string {
+	if len(entries) == 0 {
+		return ""
+	}
+
+	var commonRoot string
+	for _, entry := range entries {
+		name := entry.name
+		if idx := strings.Index(name, "/"); idx > 0 {
+			root := name[:idx+1]
+			if commonRoot == "" {
+				commonRoot = root
+			} else if commonRoot != root {
+				return ""
+			}
+		} else if entry.header.Typeflag != tar.TypeDir {
+			return ""
+		}
+	}
+
+	return commonRoot
+}
+
+func (s *DeployService) extractTarEntry(reader *tar.Reader, header *tar.Header, destPath, commonRoot string) error {
+	name := header.Name
+	if commonRoot != "" && strings.HasPrefix(name, commonRoot) {
+		name = strings.TrimPrefix(name, commonRoot)
+	}
+
+	if name == "" {
+		return nil
+	}
+
+	if err := s.validatePath(name); err != nil {
+		return err
+	}
+
+	// Check for symlinks
+	if header.Typeflag == tar.TypeSymlink || header.Typeflag == tar.TypeLink {
+		return ErrSymlinkDetected
+	}
+
+	fullPath := filepath.Join(destPath, name)
+
+	if !strings.HasPrefix(filepath.Clean(fullPath), filepath.Clean(destPath)) {
+		return ErrPathTraversal
+	}
+
+	switch header.Typeflag {
+	case tar.TypeDir:
+		return os.MkdirAll(fullPath, 0755)
+	case tar.TypeReg:
+		if header.Size > MaxFileSize {
+			return fmt.Errorf("%w: %s (%d bytes)", ErrFileTooLarge, name, header.Size)
+		}
+
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+			return err
+		}
+
+		destFile, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(header.Mode).Perm())
+		if err != nil {
+			return err
+		}
+		defer destFile.Close()
+
+		_, err = io.Copy(destFile, io.LimitReader(reader, MaxFileSize+1))
+		return err
 	}
 
 	return nil
