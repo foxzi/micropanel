@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-02-08
+
+### Fixed
+- setup-panel-nginx.sh now strips YAML comments from config values
+
 ## [1.2.4] - 2026-02-08
 
 ### Added

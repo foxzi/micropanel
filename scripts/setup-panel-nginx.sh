@@ -16,8 +16,8 @@ for arg in "$@"; do
     esac
 done
 
-# Extract panel_domain from config
-PANEL_DOMAIN=$(grep -E "^\s*panel_domain:" "$CONFIG_FILE" 2>/dev/null | sed 's/.*panel_domain:\s*//' | tr -d '"' | tr -d "'" | xargs)
+# Extract panel_domain from config (strip comments)
+PANEL_DOMAIN=$(grep -E "^\s*panel_domain:" "$CONFIG_FILE" 2>/dev/null | sed 's/.*panel_domain:\s*//' | sed 's/#.*//' | tr -d '"' | tr -d "'" | xargs)
 
 if [ -z "$PANEL_DOMAIN" ] || [ "$PANEL_DOMAIN" = '""' ] || [ "$PANEL_DOMAIN" = "''" ]; then
     echo "Error: panel_domain is not set in $CONFIG_FILE"
@@ -25,8 +25,8 @@ if [ -z "$PANEL_DOMAIN" ] || [ "$PANEL_DOMAIN" = '""' ] || [ "$PANEL_DOMAIN" = "
     exit 1
 fi
 
-# Extract ssl.email from config (optional)
-SSL_EMAIL=$(grep -E "^\s*email:" "$CONFIG_FILE" 2>/dev/null | head -1 | sed 's/.*email:\s*//' | tr -d '"' | tr -d "'" | xargs)
+# Extract ssl.email from config (optional, strip comments)
+SSL_EMAIL=$(grep -E "^\s*email:" "$CONFIG_FILE" 2>/dev/null | head -1 | sed 's/.*email:\s*//' | sed 's/#.*//' | tr -d '"' | tr -d "'" | xargs)
 
 # Generate nginx config
 echo "Generating nginx config for $PANEL_DOMAIN..."
