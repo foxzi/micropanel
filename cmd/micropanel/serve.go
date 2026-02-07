@@ -15,6 +15,7 @@ import (
 	"micropanel/internal/database"
 	"micropanel/internal/handlers"
 	"micropanel/internal/middleware"
+	"micropanel/internal/models"
 	"micropanel/internal/repository"
 	"micropanel/internal/services"
 )
@@ -64,6 +65,11 @@ func runServe(cmd *cobra.Command, args []string) {
 	userRepo := repository.NewUserRepository(db)
 	sessionRepo := repository.NewSessionRepository(db)
 	siteRepo := repository.NewSiteRepository(db)
+
+	// Startup validation
+	if err := validateStartup(cfg, userRepo); err != nil {
+		log.Fatal(err)
+	}
 	domainRepo := repository.NewDomainRepository(db)
 	deployRepo := repository.NewDeployRepository(db)
 	redirectRepo := repository.NewRedirectRepository(db)
@@ -215,4 +221,64 @@ func runServe(cmd *cobra.Command, args []string) {
 
 	<-quit
 	log.Println("Shutting down server...")
+}
+
+func validateStartup(cfg *config.Config, userRepo *repository.UserRepository) error {
+	var errors []string
+
+	// Check panel_domain
+	if cfg.App.PanelDomain == "" {
+		errors = append(errors, "panel_domain is not configured")
+	}
+
+	// Check admin user exists
+	users, err := userRepo.List()
+	if err != nil {
+		return fmt.Errorf("failed to check users: %v", err)
+	}
+
+	hasAdmin := false
+	for _, u := range users {
+		if u.Role == models.RoleAdmin && u.IsActive {
+			hasAdmin = true
+			break
+		}
+	}
+
+	if !hasAdmin {
+		errors = append(errors, "no admin user found")
+	}
+
+	if len(errors) > 0 {
+		log.Println("")
+		log.Println("========================================")
+		log.Println("  MicroPanel configuration incomplete!")
+		log.Println("========================================")
+		log.Println("")
+		for _, e := range errors {
+			log.Printf("  - %s", e)
+		}
+		log.Println("")
+		log.Println("To fix:")
+		log.Println("")
+		if cfg.App.PanelDomain == "" {
+			log.Println("  1. Set panel_domain in /etc/micropanel/config.yaml")
+			log.Println("     Example: panel_domain: panel.example.com")
+			log.Println("")
+		}
+		if !hasAdmin {
+			log.Println("  2. Create admin user:")
+			log.Println("     micropanel user create -e admin@example.com -p yourpassword -r admin")
+			log.Println("")
+		}
+		log.Println("  3. Setup nginx:")
+		log.Println("     /usr/share/micropanel/scripts/setup-panel-nginx.sh")
+		log.Println("")
+		log.Println("  4. Start service:")
+		log.Println("     systemctl start micropanel")
+		log.Println("")
+		return fmt.Errorf("startup validation failed")
+	}
+
+	return nil
 }

@@ -39,22 +39,20 @@ sudo systemctl enable --now micropanel
 sudo nano /etc/micropanel/config.yaml
 # Set panel_domain: panel.example.com
 
-# 2. Setup nginx
+# 2. Create admin user
+sudo micropanel user create -e admin@example.com -p yourpassword -r admin
+
+# 3. Setup nginx
 sudo /usr/share/micropanel/scripts/setup-panel-nginx.sh
 
-# 3. Start service
+# 4. Start service
 sudo systemctl enable --now micropanel
 
-# 4. (Optional) Enable SSL
+# 5. (Optional) Enable SSL
 sudo certbot --nginx -d panel.example.com
 ```
 
-## Default Credentials
-
-- **Email:** admin@localhost
-- **Password:** admin
-
-**Important:** Change the password after first login!
+**Important:** Service will not start until steps 1 and 2 are completed!
 
 ## Configuration
 

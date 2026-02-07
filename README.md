@@ -51,19 +51,23 @@ sudo apt-get install -f  # install dependencies
 sudo rpm -i micropanel-1.1.0-1.x86_64.rpm
 ```
 
-**Start service:**
+**Post-installation setup:**
 ```bash
-# Edit configuration
-sudo nano /etc/micropanel/micropanel.env
+# 1. Set panel domain
+sudo nano /etc/micropanel/config.yaml
+# Set panel_domain: panel.example.com
 
-# Start and enable service
+# 2. Create admin user
+sudo micropanel user create -e admin@example.com -p yourpassword -r admin
+
+# 3. Setup nginx
+sudo /usr/share/micropanel/scripts/setup-panel-nginx.sh
+
+# 4. Start service
 sudo systemctl enable --now micropanel
-
-# Check status
-sudo systemctl status micropanel
 ```
 
-Default credentials: `admin@localhost` / `admin`
+**Note:** Service will not start until configuration is complete.
 
 ### From source (Docker)
 
