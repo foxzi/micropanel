@@ -169,11 +169,11 @@ jobs:
             fi
           done
 
-          cd ../../..
+          cd ../../../..
 
           # Copy RPM packages
           mkdir -p _site/rpm
-          cp packages/*.rpm _site/rpm/
+          cp packages/*.rpm _site/rpm/ || true
 
           # Generate index.html
           cat > _site/index.html << 'HTMLEOF'
@@ -212,8 +212,8 @@ jobs:
               <h2>Direct Download</h2>
               <h3>DEB packages</h3>
               <p>
-                <a class="btn" href="apt/pool/main/micropanel_CURRENT_VERSION-1_amd64.deb">amd64</a>
-                <a class="btn" href="apt/pool/main/micropanel_CURRENT_VERSION-1_arm64.deb">arm64</a>
+                <a class="btn" href="apt/pool/main/amd64/micropanel_CURRENT_VERSION-1_amd64.deb">amd64</a>
+                <a class="btn" href="apt/pool/main/arm64/micropanel_CURRENT_VERSION-1_arm64.deb">arm64</a>
               </p>
               <h3>RPM packages</h3>
               <p>

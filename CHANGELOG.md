@@ -7,11 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.2] - 2026-02-08
+## [1.1.3] - 2026-02-08
 
 ### Fixed
 - Logout button now works correctly (CSRF token passed via meta tag to HTMX requests)
 - APT repository now correctly separates amd64 and arm64 packages with proper Release file hashes
+- Fixed APT repository build workflow paths
 
 ### Changed
 - Server name in dashboard widget is now bold and red
