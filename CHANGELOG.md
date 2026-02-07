@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Config options `sites.user` and `sites.group` for site directory ownership
+- Automatic chown of site directories to configured user/group after creation
+- Automatic chown of deployed files to configured user/group
+
+### Fixed
+- Site directories created via CLI as root now have correct ownership for service
+
 ## [1.2.10] - 2026-02-08
 
 ### Fixed

@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -152,7 +154,49 @@ func (s *DeployService) processDeploy(deploy *models.Deploy, archiveReader io.Re
 		return fmt.Errorf("activate new public: %w", err)
 	}
 
+	// Chown to configured user/group
+	s.chownPath(publicPath)
+
 	return nil
+}
+
+func (s *DeployService) chownPath(path string) {
+	uid, gid, err := s.getSiteOwnership()
+	if err != nil {
+		return // Skip chown if user/group not found
+	}
+
+	filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		os.Chown(p, uid, gid)
+		return nil
+	})
+}
+
+func (s *DeployService) getSiteOwnership() (uid, gid int, err error) {
+	userName := s.config.Sites.User
+	groupName := s.config.Sites.Group
+
+	if userName == "" || groupName == "" {
+		return -1, -1, fmt.Errorf("user/group not configured")
+	}
+
+	u, err := user.Lookup(userName)
+	if err != nil {
+		return -1, -1, err
+	}
+
+	g, err := user.LookupGroup(groupName)
+	if err != nil {
+		return -1, -1, err
+	}
+
+	uid, _ = strconv.Atoi(u.Uid)
+	gid, _ = strconv.Atoi(g.Gid)
+
+	return uid, gid, nil
 }
 
 func (s *DeployService) extractZip(zipPath, destPath string) error {

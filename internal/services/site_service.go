@@ -3,7 +3,9 @@ package services
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 
 	"micropanel/internal/config"
 	"micropanel/internal/models"
@@ -139,5 +141,49 @@ func (s *SiteService) createSiteDirectories(siteID int64) error {
 <body><h1>Welcome to Site %d</h1><p>Deploy your files to see your content.</p></body>
 </html>`, siteID, siteID)
 
-	return os.WriteFile(indexPath, []byte(defaultContent), 0644)
+	if err := os.WriteFile(indexPath, []byte(defaultContent), 0644); err != nil {
+		return err
+	}
+
+	// Chown to configured user/group
+	return s.chownSiteDirectory(siteID)
+}
+
+func (s *SiteService) chownSiteDirectory(siteID int64) error {
+	uid, gid, err := s.getSiteOwnership()
+	if err != nil {
+		return nil // Skip chown if user/group not found (e.g. in dev)
+	}
+
+	sitePath := s.GetSitePath(siteID)
+	return filepath.Walk(sitePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Chown(path, uid, gid)
+	})
+}
+
+func (s *SiteService) getSiteOwnership() (uid, gid int, err error) {
+	userName := s.config.Sites.User
+	groupName := s.config.Sites.Group
+
+	if userName == "" || groupName == "" {
+		return -1, -1, fmt.Errorf("user/group not configured")
+	}
+
+	u, err := user.Lookup(userName)
+	if err != nil {
+		return -1, -1, err
+	}
+
+	g, err := user.LookupGroup(groupName)
+	if err != nil {
+		return -1, -1, err
+	}
+
+	uid, _ = strconv.Atoi(u.Uid)
+	gid, _ = strconv.Atoi(g.Gid)
+
+	return uid, gid, nil
 }

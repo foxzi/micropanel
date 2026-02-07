@@ -58,7 +58,9 @@ type DatabaseConfig struct {
 }
 
 type SitesConfig struct {
-	Path string `yaml:"path"`
+	Path  string `yaml:"path"`
+	User  string `yaml:"user"`
+	Group string `yaml:"group"`
 }
 
 type NginxConfig struct {
@@ -85,7 +87,9 @@ func Load() (*Config, error) {
 			Path: "/var/lib/micropanel/micropanel.db",
 		},
 		Sites: SitesConfig{
-			Path: "/var/www/panel/sites",
+			Path:  "/var/www/panel/sites",
+			User:  "micropanel",
+			Group: "micropanel",
 		},
 		Nginx: NginxConfig{
 			ConfigPath: "/etc/nginx/sites-enabled",
