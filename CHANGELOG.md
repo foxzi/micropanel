@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-02-08
+
 ### Added
 - certbot and python3-certbot-nginx as package dependencies
 - Docker entrypoint script that auto-creates admin user
@@ -17,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Use --no-ssl flag to skip SSL certificate generation
 - Docker now uses dedicated config instead of local config.yaml
 - Updated GitHub Pages with new installation instructions
+
+## [1.2.3] - 2026-02-08
+
+### Changed
+- Removed default admin user (admin@localhost)
+- Service now requires configuration before starting
+- Startup validation checks for panel_domain and admin user
+- Clear error messages in logs when configuration is incomplete
+
+### Removed
+- Default user creation in migrations
 
 ## [1.2.2] - 2026-02-08
 
