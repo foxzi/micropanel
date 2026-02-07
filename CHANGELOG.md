@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.12] - 2026-02-08
+
+### Fixed
+- Nginx config write/remove now uses sudo (fixes permission denied error)
+- Added sudo permissions for tee and rm in /etc/nginx/sites-enabled/
+
 ## [1.2.11] - 2026-02-08
 
 ### Added

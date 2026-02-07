@@ -226,14 +226,11 @@ func (s *NginxService) WriteConfig(siteID int64) error {
 
 	configPath := s.getConfigPath(siteID)
 
-	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return fmt.Errorf("create config directory: %w", err)
-	}
-
-	// Write config file
-	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
-		return fmt.Errorf("write config file: %w", err)
+	// Write config via sudo tee (micropanel user has no direct write access)
+	cmd := exec.Command("sudo", "tee", configPath)
+	cmd.Stdin = strings.NewReader(config)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("write config file: %w: %s", err, string(output))
 	}
 
 	return nil
@@ -241,8 +238,11 @@ func (s *NginxService) WriteConfig(siteID int64) error {
 
 func (s *NginxService) RemoveConfig(siteID int64) error {
 	configPath := s.getConfigPath(siteID)
-	if err := os.Remove(configPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove config file: %w", err)
+
+	// Remove config via sudo rm (micropanel user has no direct write access)
+	cmd := exec.Command("sudo", "rm", "-f", configPath)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("remove config file: %w: %s", err, string(output))
 	}
 	return nil
 }
@@ -271,9 +271,7 @@ func (s *NginxService) Reload() error {
 }
 
 func (s *NginxService) ApplyConfig(siteID int64) error {
-	// Backup existing config
 	configPath := s.getConfigPath(siteID)
-	backupPath := configPath + ".backup"
 
 	// Read existing config for backup
 	existingConfig, _ := os.ReadFile(configPath)
@@ -287,15 +285,14 @@ func (s *NginxService) ApplyConfig(siteID int64) error {
 	if err := s.TestConfig(); err != nil {
 		// Rollback on failure
 		if len(existingConfig) > 0 {
-			os.WriteFile(configPath, existingConfig, 0644)
+			cmd := exec.Command("sudo", "tee", configPath)
+			cmd.Stdin = strings.NewReader(string(existingConfig))
+			cmd.Run()
 		} else {
-			os.Remove(configPath)
+			exec.Command("sudo", "rm", "-f", configPath).Run()
 		}
 		return fmt.Errorf("config test failed, rolled back: %w", err)
 	}
-
-	// Remove backup if exists
-	os.Remove(backupPath)
 
 	// Reload nginx
 	return s.Reload()
