@@ -13,13 +13,15 @@ import (
 type APIHandler struct {
 	siteService   *services.SiteService
 	deployService *services.DeployService
+	nginxService  *services.NginxService
 	auditService  *services.AuditService
 }
 
-func NewAPIHandler(siteService *services.SiteService, deployService *services.DeployService, auditService *services.AuditService) *APIHandler {
+func NewAPIHandler(siteService *services.SiteService, deployService *services.DeployService, nginxService *services.NginxService, auditService *services.AuditService) *APIHandler {
 	return &APIHandler{
 		siteService:   siteService,
 		deployService: deployService,
+		nginxService:  nginxService,
 		auditService:  auditService,
 	}
 }
@@ -65,6 +67,9 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to create site"})
 		return
 	}
+
+	// Generate nginx config
+	h.nginxService.WriteConfig(site.ID)
 
 	// Log via audit
 	token := middleware.GetAPIToken(c)

@@ -81,7 +81,7 @@ func runServe(cmd *cobra.Command, args []string) {
 	fileHandler := handlers.NewFileHandler(fileService, siteService, auditService)
 	auditHandler := handlers.NewAuditHandler(auditService, userRepo)
 	userHandler := handlers.NewUserHandler(userRepo, auditService)
-	apiHandler := handlers.NewAPIHandler(siteService, deployService, auditService)
+	apiHandler := handlers.NewAPIHandler(siteService, deployService, nginxService, auditService)
 
 	if !cfg.IsDevelopment() {
 		gin.SetMode(gin.ReleaseMode)
