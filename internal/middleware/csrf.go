@@ -23,7 +23,7 @@ func CSRF() gin.HandlerFunc {
 		token, err := c.Cookie(CSRFCookieKey)
 		if err != nil || len(token) != CSRFTokenLength*2 {
 			token = generateCSRFToken()
-			c.SetCookie(CSRFCookieKey, token, 86400, "/", "", false, true)
+			c.SetCookie(CSRFCookieKey, token, 86400, "/", "", false, false)
 		}
 
 		// Store token in context for templates

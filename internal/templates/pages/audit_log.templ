@@ -27,8 +27,8 @@ func actionColor(action string) string {
 	}
 }
 
-templ AuditLog(user *models.User, logs []*models.AuditLog, userEmails map[int64]string, page, totalPages, total int) {
-	@layouts.Base("Audit Log", user) {
+templ AuditLog(user *models.User, logs []*models.AuditLog, userEmails map[int64]string, page, totalPages, total int, csrfToken string) {
+	@layouts.Base("Audit Log", user, csrfToken) {
 		<div class="mb-8">
 			<div class="flex justify-between items-center">
 				<div>

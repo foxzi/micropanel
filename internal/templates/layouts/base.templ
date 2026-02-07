@@ -2,12 +2,15 @@ package layouts
 
 import "micropanel/internal/models"
 
-templ Base(title string, user *models.User) {
+templ Base(title string, user *models.User, csrfToken ...string) {
 	<!DOCTYPE html>
 	<html lang="en" class="light">
 	<head>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		if len(csrfToken) > 0 && csrfToken[0] != "" {
+			<meta name="csrf-token" content={ csrfToken[0] }/>
+		}
 		<title>{ title } - MicroPanel</title>
 		<script src="https://unpkg.com/htmx.org@1.9.10"></script>
 		<script src="https://cdn.tailwindcss.com"></script>
@@ -71,6 +74,21 @@ templ Base(title string, user *models.User) {
 				const menu = document.getElementById('settings-menu');
 				if (dropdown && menu && !dropdown.contains(e.target)) {
 					menu.classList.add('hidden');
+				}
+			});
+
+			// Add CSRF token to all HTMX requests
+			document.addEventListener('htmx:configRequest', function(e) {
+				// Get CSRF token from meta tag
+				const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+				if (csrfMeta) {
+					e.detail.headers['X-CSRF-Token'] = csrfMeta.content;
+					return;
+				}
+				// Fallback: try cookie
+				const csrfCookie = document.cookie.split('; ').find(row => row.startsWith('_csrf='));
+				if (csrfCookie) {
+					e.detail.headers['X-CSRF-Token'] = csrfCookie.split('=')[1];
 				}
 			});
 		</script>

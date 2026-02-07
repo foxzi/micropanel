@@ -124,32 +124,52 @@ jobs:
           VERSION=${{ steps.version.outputs.version }}
 
           # Create APT repo structure
-          mkdir -p _site/apt/pool/main
+          mkdir -p _site/apt/pool/main/amd64
+          mkdir -p _site/apt/pool/main/arm64
           mkdir -p _site/apt/dists/stable/main/binary-amd64
           mkdir -p _site/apt/dists/stable/main/binary-arm64
 
-          # Copy DEB packages to pool
-          cp packages/*.deb _site/apt/pool/main/
+          # Copy DEB packages to pool by architecture
+          cp packages/*_amd64.deb _site/apt/pool/main/amd64/ || true
+          cp packages/*_arm64.deb _site/apt/pool/main/arm64/ || true
 
-          # Generate Packages files
           cd _site/apt
-          dpkg-scanpackages pool/main /dev/null > dists/stable/main/binary-amd64/Packages
-          dpkg-scanpackages pool/main /dev/null > dists/stable/main/binary-arm64/Packages
+
+          # Generate Packages files for each architecture
+          dpkg-scanpackages pool/main/amd64 /dev/null > dists/stable/main/binary-amd64/Packages
+          dpkg-scanpackages pool/main/arm64 /dev/null > dists/stable/main/binary-arm64/Packages
           gzip -k dists/stable/main/binary-amd64/Packages
           gzip -k dists/stable/main/binary-arm64/Packages
 
-          # Generate Release file
-          cat > dists/stable/Release << RELEASE
+          # Generate Release file with hashes
+          cd dists/stable
+          cat > Release << EOF
           Origin: MicroPanel
           Label: MicroPanel
           Suite: stable
           Codename: stable
+          Date: $(date -Ru)
           Architectures: amd64 arm64
           Components: main
           Description: MicroPanel APT Repository
-          RELEASE
+          MD5Sum:
+          EOF
 
-          cd ../..
+          # Add MD5 hashes
+          for f in main/binary-amd64/Packages main/binary-amd64/Packages.gz main/binary-arm64/Packages main/binary-arm64/Packages.gz; do
+            if [ -f "$f" ]; then
+              echo " $(md5sum $f | cut -d' ' -f1) $(wc -c < $f | tr -d ' ') $f" >> Release
+            fi
+          done
+
+          echo "SHA256:" >> Release
+          for f in main/binary-amd64/Packages main/binary-amd64/Packages.gz main/binary-arm64/Packages main/binary-arm64/Packages.gz; do
+            if [ -f "$f" ]; then
+              echo " $(sha256sum $f | cut -d' ' -f1) $(wc -c < $f | tr -d ' ') $f" >> Release
+            fi
+          done
+
+          cd ../../..
 
           # Copy RPM packages
           mkdir -p _site/rpm

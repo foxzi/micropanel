@@ -16,7 +16,7 @@ script hideModal(id string) {
 }
 
 templ SiteView(user *models.User, site *models.Site, deploys []*models.Deploy, redirects []*models.Redirect, authZones []*models.AuthZone, canRollback bool, csrfToken string) {
-	@layouts.Base(site.Name, user) {
+	@layouts.Base(site.Name, user, csrfToken) {
 		<div class="mb-6">
 			<a href="/" class="text-blue-600 hover:text-blue-900">&larr; Back to Dashboard</a>
 		</div>

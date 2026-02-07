@@ -54,8 +54,9 @@ func (h *AuditHandler) List(c *gin.Context) {
 	}
 
 	totalPages := (total + perPage - 1) / perPage
+	csrfToken := middleware.GetCSRFToken(c)
 
-	component := pages.AuditLog(user, logs, userEmails, page, totalPages, total)
+	component := pages.AuditLog(user, logs, userEmails, page, totalPages, total, csrfToken)
 	component.Render(c.Request.Context(), c.Writer)
 }
 

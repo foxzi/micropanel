@@ -6,7 +6,7 @@ import (
 )
 
 templ Settings(user *models.User, info *models.ServerInfo, csrfToken string, message string) {
-	@layouts.Base("Server Settings", user) {
+	@layouts.Base("Server Settings", user, csrfToken) {
 		<div class="max-w-2xl mx-auto">
 			<div class="mb-6">
 				<h1 class="text-2xl font-bold text-gray-900 dark:text-white">Server Settings</h1>
