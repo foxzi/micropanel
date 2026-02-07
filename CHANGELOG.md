@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.7] - 2026-02-08
+
+### Fixed
+- Fix static files packaging (js/css subdirectories were flattened)
+
+## [1.2.6] - 2026-02-08
+
 ### Fixed
 - Generate nginx config when creating site via UI (was only working via API)
 - Regenerate nginx config when updating site settings

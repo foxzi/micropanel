@@ -44,8 +44,13 @@ contents:
       mode: 0644
 
   # Web static files
-  - src: web/static/
-    dst: /usr/share/micropanel/web/static/
+  - src: web/static/js/
+    dst: /usr/share/micropanel/web/static/js/
+    file_info:
+      mode: 0644
+
+  - src: web/static/css/
+    dst: /usr/share/micropanel/web/static/css/
     file_info:
       mode: 0644
 
