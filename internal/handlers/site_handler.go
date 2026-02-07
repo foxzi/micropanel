@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"micropanel/internal/middleware"
+	"micropanel/internal/models"
 	"micropanel/internal/services"
 	"micropanel/internal/templates/pages"
 )
@@ -17,15 +18,17 @@ type SiteHandler struct {
 	redirectService *services.RedirectService
 	authZoneService *services.AuthZoneService
 	auditService    *services.AuditService
+	settingsService *services.SettingsService
 }
 
-func NewSiteHandler(siteService *services.SiteService, deployService *services.DeployService, redirectService *services.RedirectService, authZoneService *services.AuthZoneService, auditService *services.AuditService) *SiteHandler {
+func NewSiteHandler(siteService *services.SiteService, deployService *services.DeployService, redirectService *services.RedirectService, authZoneService *services.AuthZoneService, auditService *services.AuditService, settingsService *services.SettingsService) *SiteHandler {
 	return &SiteHandler{
 		siteService:     siteService,
 		deployService:   deployService,
 		redirectService: redirectService,
 		authZoneService: authZoneService,
 		auditService:    auditService,
+		settingsService: settingsService,
 	}
 }
 
@@ -53,7 +56,12 @@ func (h *SiteHandler) Dashboard(c *gin.Context) {
 		totalPages = 1
 	}
 
-	component := pages.Dashboard(user, sites, csrfToken, search, page, totalPages, total)
+	var serverInfo *models.ServerInfo
+	if h.settingsService != nil {
+		serverInfo = h.settingsService.GetServerInfo()
+	}
+
+	component := pages.Dashboard(user, sites, csrfToken, search, page, totalPages, total, serverInfo)
 	component.Render(c.Request.Context(), c.Writer)
 }
 
