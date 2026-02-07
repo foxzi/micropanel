@@ -6,11 +6,13 @@ Minimalist static hosting control panel written in Go.
 
 - Static site hosting management
 - Domain binding with SSL (Let's Encrypt)
-- ZIP deploy with rollback support
+- ZIP/TGZ deploy with rollback support
 - Redirects configuration
 - Basic Auth zones
 - File manager
 - Audit logging
+- Dark theme with system preference detection
+- Sites search and pagination
 
 ## Tech Stack
 
@@ -40,13 +42,13 @@ Download packages from [Releases](https://github.com/foxzi/micropanel/releases) 
 
 **Debian/Ubuntu:**
 ```bash
-sudo dpkg -i micropanel_1.0.0-1_amd64.deb
+sudo dpkg -i micropanel_1.1.0-1_amd64.deb
 sudo apt-get install -f  # install dependencies
 ```
 
 **RHEL/Fedora:**
 ```bash
-sudo rpm -i micropanel-1.0.0-1.x86_64.rpm
+sudo rpm -i micropanel-1.1.0-1.x86_64.rpm
 ```
 
 **Start service:**
@@ -86,7 +88,7 @@ micropanel user reset-password admin@example.com -p newpassword
 
 # Site management
 micropanel site list
-micropanel site create -n "my-site" -o 1
+micropanel site create -n example.com -o 1
 micropanel site enable 1
 ```
 

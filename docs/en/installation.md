@@ -9,7 +9,7 @@
 
 ```bash
 # Clone repository
-git clone https://github.com/yourname/micropanel.git
+git clone https://github.com/foxzi/micropanel.git
 cd micropanel
 
 # Start with Docker Compose

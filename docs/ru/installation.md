@@ -9,7 +9,7 @@
 
 ```bash
 # Клонируйте репозиторий
-git clone https://github.com/yourname/micropanel.git
+git clone https://github.com/foxzi/micropanel.git
 cd micropanel
 
 # Запустите с Docker Compose
