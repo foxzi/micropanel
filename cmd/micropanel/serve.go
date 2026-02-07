@@ -206,7 +206,7 @@ func runServe(cmd *cobra.Command, args []string) {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		addr := fmt.Sprintf(":%d", cfg.App.Port)
+		addr := fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port)
 		log.Printf("Starting server on %s", addr)
 		if err := r.Run(addr); err != nil {
 			log.Fatalf("Failed to start server: %v", err)

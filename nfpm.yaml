@@ -55,6 +55,16 @@ contents:
     file_info:
       mode: 0755
 
+  - src: scripts/setup-panel-nginx.sh
+    dst: /usr/share/micropanel/scripts/setup-panel-nginx.sh
+    file_info:
+      mode: 0755
+
+  - src: scripts/panel-nginx.conf.tmpl
+    dst: /usr/share/micropanel/scripts/panel-nginx.conf.tmpl
+    file_info:
+      mode: 0644
+
   # Systemd services
   - src: scripts/micropanel.service
     dst: /usr/lib/systemd/system/micropanel.service

@@ -32,6 +32,23 @@ sudo dnf install https://foxzi.github.io/micropanel/rpm/micropanel-1.2.0-1.x86_6
 sudo systemctl enable --now micropanel
 ```
 
+## Post-Installation Setup
+
+```bash
+# 1. Set panel domain
+sudo nano /etc/micropanel/config.yaml
+# Set panel_domain: panel.example.com
+
+# 2. Setup nginx
+sudo /usr/share/micropanel/scripts/setup-panel-nginx.sh
+
+# 3. Start service
+sudo systemctl enable --now micropanel
+
+# 4. (Optional) Enable SSL
+sudo certbot --nginx -d panel.example.com
+```
+
 ## Default Credentials
 
 - **Email:** admin@localhost
@@ -46,8 +63,10 @@ Configuration file: `/etc/micropanel/config.yaml`
 ```yaml
 app:
   env: production
+  host: 127.0.0.1
   port: 8080
   secret: auto-generated-on-install
+  panel_domain: panel.example.com
 
 database:
   path: /var/lib/micropanel/micropanel.db

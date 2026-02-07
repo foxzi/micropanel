@@ -46,9 +46,11 @@ type SSLConfig struct {
 }
 
 type AppConfig struct {
-	Env    string `yaml:"env"`
-	Port   int    `yaml:"port"`
-	Secret string `yaml:"secret"`
+	Env         string `yaml:"env"`
+	Host        string `yaml:"host"`
+	Port        int    `yaml:"port"`
+	Secret      string `yaml:"secret"`
+	PanelDomain string `yaml:"panel_domain"`
 }
 
 type DatabaseConfig struct {
@@ -73,9 +75,11 @@ var ConfigPaths = []string{
 func Load() (*Config, error) {
 	cfg := &Config{
 		App: AppConfig{
-			Env:    "development",
-			Port:   8080,
-			Secret: "change-me-in-production",
+			Env:         "development",
+			Host:        "127.0.0.1",
+			Port:        8080,
+			Secret:      "change-me-in-production",
+			PanelDomain: "",
 		},
 		Database: DatabaseConfig{
 			Path: "/var/lib/micropanel/micropanel.db",

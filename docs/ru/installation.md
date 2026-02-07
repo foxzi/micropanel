@@ -32,6 +32,23 @@ sudo dnf install https://foxzi.github.io/micropanel/rpm/micropanel-1.2.0-1.x86_6
 sudo systemctl enable --now micropanel
 ```
 
+## Настройка после установки
+
+```bash
+# 1. Укажите домен панели
+sudo nano /etc/micropanel/config.yaml
+# Установите panel_domain: panel.example.com
+
+# 2. Настройте nginx
+sudo /usr/share/micropanel/scripts/setup-panel-nginx.sh
+
+# 3. Запустите сервис
+sudo systemctl enable --now micropanel
+
+# 4. (Опционально) Включите SSL
+sudo certbot --nginx -d panel.example.com
+```
+
 ## Учетные данные по умолчанию
 
 - **Email:** admin@localhost

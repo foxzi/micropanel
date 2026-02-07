@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-02-08
+
+### Added
+- Panel now listens on 127.0.0.1:8080 by default (localhost only)
+- New `panel_domain` config option for nginx setup
+- Script to generate nginx reverse proxy config: `/usr/share/micropanel/scripts/setup-panel-nginx.sh`
+
+### Changed
+- Added `host` option to config (default: 127.0.0.1)
+
 ## [1.2.1] - 2026-02-08
 
 ### Fixed

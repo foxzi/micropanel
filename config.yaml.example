@@ -1,7 +1,9 @@
 app:
   env: production           # development / production
+  host: 127.0.0.1           # Listen address (127.0.0.1 = localhost only)
   port: 8080                # HTTP port for panel
   secret: change-me-min-32-chars-random-string  # Session secret (min 32 chars)
+  panel_domain: ""          # Panel domain for nginx (e.g., panel.example.com)
 
 database:
   path: /var/lib/micropanel/micropanel.db
