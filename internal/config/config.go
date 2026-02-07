@@ -64,6 +64,12 @@ type NginxConfig struct {
 	ReloadCmd  string `yaml:"reload_cmd"`
 }
 
+// Default config paths
+var ConfigPaths = []string{
+	"/etc/micropanel/config.yaml",
+	"config.yaml",
+}
+
 func Load() (*Config, error) {
 	cfg := &Config{
 		App: AppConfig{
@@ -72,7 +78,7 @@ func Load() (*Config, error) {
 			Secret: "change-me-in-production",
 		},
 		Database: DatabaseConfig{
-			Path: "./data/micropanel.db",
+			Path: "/var/lib/micropanel/micropanel.db",
 		},
 		Sites: SitesConfig{
 			Path: "/var/www/panel/sites",
@@ -101,10 +107,13 @@ func Load() (*Config, error) {
 		},
 	}
 
-	// Load from YAML if exists
-	if data, err := os.ReadFile("config.yaml"); err == nil {
-		if err := yaml.Unmarshal(data, cfg); err != nil {
-			return nil, err
+	// Load from YAML if exists (check multiple paths)
+	for _, path := range ConfigPaths {
+		if data, err := os.ReadFile(path); err == nil {
+			if err := yaml.Unmarshal(data, cfg); err != nil {
+				return nil, err
+			}
+			break
 		}
 	}
 

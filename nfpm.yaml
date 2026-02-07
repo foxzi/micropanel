@@ -24,26 +24,34 @@ recommends:
 contents:
   # Binary
   - src: bin/micropanel
-    dst: /opt/micropanel/bin/micropanel
+    dst: /usr/bin/micropanel
     file_info:
       mode: 0755
 
-  # Config example
+  # Config
   - src: config.yaml.example
-    dst: /opt/micropanel/config.yaml.example
-    type: config
+    dst: /etc/micropanel/config.yaml
+    type: config|noreplace
     file_info:
-      mode: 0644
+      mode: 0640
+      owner: root
+      group: micropanel
 
   # Migrations
   - src: migrations/
-    dst: /opt/micropanel/migrations/
+    dst: /usr/share/micropanel/migrations/
+    file_info:
+      mode: 0644
+
+  # Web static files
+  - src: web/static/
+    dst: /usr/share/micropanel/web/static/
     file_info:
       mode: 0644
 
   # Scripts
   - src: scripts/ssl-renew.sh
-    dst: /opt/micropanel/scripts/ssl-renew.sh
+    dst: /usr/share/micropanel/scripts/ssl-renew.sh
     file_info:
       mode: 0755
 
@@ -80,10 +88,10 @@ contents:
       mode: 0644
 
   # Directories
-  - dst: /opt/micropanel/data
+  - dst: /var/lib/micropanel
     type: dir
     file_info:
-      mode: 0755
+      mode: 0750
       owner: micropanel
       group: micropanel
 

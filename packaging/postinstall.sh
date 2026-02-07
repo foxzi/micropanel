@@ -2,8 +2,10 @@
 set -e
 
 # Set ownership
-chown -R micropanel:micropanel /opt/micropanel/data
+chown -R micropanel:micropanel /var/lib/micropanel
 chown -R micropanel:micropanel /var/www/panel/sites
+chown root:micropanel /etc/micropanel/config.yaml
+chmod 640 /etc/micropanel/config.yaml
 
 # Create sudoers file for micropanel user
 cat > /etc/sudoers.d/micropanel <<EOF
@@ -13,19 +15,10 @@ micropanel ALL=(ALL) NOPASSWD: /usr/sbin/nginx
 EOF
 chmod 440 /etc/sudoers.d/micropanel
 
-# Create config from example if not exists
-if [ ! -f /etc/micropanel/micropanel.env ]; then
-    cat > /etc/micropanel/micropanel.env <<EOF
-# MicroPanel configuration
-# See /opt/micropanel/config.yaml.example for all options
-
-APP_ENV=production
-APP_SECRET=$(openssl rand -hex 32)
-DB_PATH=/opt/micropanel/data/micropanel.db
-SITES_PATH=/var/www/panel/sites
-NGINX_CONFIG_PATH=/etc/nginx/sites-enabled
-EOF
-    chmod 600 /etc/micropanel/micropanel.env
+# Generate random secret if default is present
+if grep -q "change-me-min-32-chars" /etc/micropanel/config.yaml 2>/dev/null; then
+    SECRET=$(openssl rand -hex 32)
+    sed -i "s/change-me-min-32-chars-random-string/$SECRET/" /etc/micropanel/config.yaml
 fi
 
 # Reload systemd
@@ -35,8 +28,8 @@ echo ""
 echo "MicroPanel installed successfully!"
 echo ""
 echo "Next steps:"
-echo "  1. Edit /etc/micropanel/micropanel.env"
-echo "  2. Start service: systemctl start micropanel"
-echo "  3. Enable on boot: systemctl enable micropanel"
-echo "  4. Access panel at http://localhost:8080"
+echo "  1. Edit config: nano /etc/micropanel/config.yaml"
+echo "  2. Start service: systemctl enable --now micropanel"
+echo "  3. Access panel at http://localhost:8080"
+echo "  4. Default login: admin@localhost / admin"
 echo ""

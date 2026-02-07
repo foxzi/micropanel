@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/opt/micropanel/scripts/ssl-renew.sh
+ExecStart=/usr/share/micropanel/scripts/ssl-renew.sh
 Environment=MICROPANEL_URL=http://localhost:8080
 # Set API key in /etc/micropanel/ssl-renew.env
 EnvironmentFile=-/etc/micropanel/ssl-renew.env

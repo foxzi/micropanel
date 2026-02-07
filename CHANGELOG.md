@@ -7,12 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.3] - 2026-02-08
+## [1.2.0] - 2026-02-08
+
+### Changed
+- Config file now at /etc/micropanel/config.yaml (FHS compliant)
+- Database now at /var/lib/micropanel/micropanel.db
+- Binary now at /usr/bin/micropanel
+- Migrations and static files now at /usr/share/micropanel/
+- Removed separate env file, all config in single YAML
+- Config file auto-generates random secret on first install
 
 ### Fixed
 - Logout button now works correctly (CSRF token passed via meta tag to HTMX requests)
 - APT repository now correctly separates amd64 and arm64 packages with proper Release file hashes
-- Fixed APT repository build workflow paths
 
 ### Changed
 - Server name in dashboard widget is now bold and red

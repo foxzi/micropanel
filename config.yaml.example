@@ -1,17 +1,17 @@
 app:
-  env: development        # development / production
-  port: 8080              # HTTP port for panel
-  secret: change-me-in-production  # Session secret (min 32 chars)
+  env: production           # development / production
+  port: 8080                # HTTP port for panel
+  secret: change-me-min-32-chars-random-string  # Session secret (min 32 chars)
 
 database:
-  path: ./data/micropanel.db
+  path: /var/lib/micropanel/micropanel.db
 
 sites:
   path: /var/www/panel/sites
 
 nginx:
   config_path: /etc/nginx/sites-enabled
-  reload_cmd: nginx -s reload
+  reload_cmd: sudo nginx -s reload
 
 ssl:
   email: admin@example.com  # Let's Encrypt notifications
@@ -22,3 +22,18 @@ limits:
   max_file_size: 5242880        # 5MB
   max_upload_size: 10485760     # 10MB
   max_sites_per_user: 0         # 0 = unlimited
+
+api:
+  enabled: false
+  tokens: []
+  # tokens:
+  #   - name: "deploy-bot"
+  #     token: "your-secret-token-here"
+
+security:
+  panel_allowed_ips: []     # Empty = allow all
+  api_allowed_ips: []       # Empty = allow all
+  # Examples:
+  # panel_allowed_ips:
+  #   - "192.168.1.0/24"
+  #   - "10.0.0.1"

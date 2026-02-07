@@ -42,8 +42,23 @@ func runServe(cmd *cobra.Command, args []string) {
 	}
 	defer db.Close()
 
-	if err := db.Migrate("migrations"); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
+	// Try multiple migration paths
+	migrationPaths := []string{
+		"/usr/share/micropanel/migrations",
+		"migrations",
+	}
+	var migrated bool
+	for _, path := range migrationPaths {
+		if _, err := os.Stat(path); err == nil {
+			if err := db.Migrate(path); err != nil {
+				log.Fatalf("Failed to run migrations: %v", err)
+			}
+			migrated = true
+			break
+		}
+	}
+	if !migrated {
+		log.Fatal("Migrations directory not found")
 	}
 
 	userRepo := repository.NewUserRepository(db)
@@ -97,7 +112,17 @@ func runServe(cmd *cobra.Command, args []string) {
 	panelGroup.Use(middleware.IPWhitelist(cfg.Security.PanelAllowedIPs))
 	panelGroup.Use(middleware.CSRF())
 
-	panelGroup.Static("/static", "./web/static")
+	// Try multiple static paths
+	staticPaths := []string{
+		"/usr/share/micropanel/web/static",
+		"web/static",
+	}
+	for _, path := range staticPaths {
+		if _, err := os.Stat(path); err == nil {
+			panelGroup.Static("/static", path)
+			break
+		}
+	}
 
 	panelGroup.GET("/login", authHandler.LoginPage)
 	panelGroup.POST("/login", loginLimiter.Middleware(), authHandler.Login)

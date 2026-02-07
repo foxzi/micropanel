@@ -2,21 +2,34 @@
 
 ## Requirements
 
-- Docker and Docker Compose
-- Git
+- Ubuntu 20.04+ / Debian 11+ / CentOS 8+
+- Nginx
+- Root access
 
-## Quick Start
+## Package Installation (Recommended)
+
+### Debian/Ubuntu (APT)
 
 ```bash
-# Clone repository
-git clone https://github.com/foxzi/micropanel.git
-cd micropanel
+# Add repository
+echo "deb [trusted=yes] https://foxzi.github.io/micropanel/apt stable main" | sudo tee /etc/apt/sources.list.d/micropanel.list
 
-# Start with Docker Compose
-make dev
+# Install package
+sudo apt update
+sudo apt install micropanel
 
-# Open in browser
-open http://localhost:8081
+# Start service
+sudo systemctl enable --now micropanel
+```
+
+### CentOS/RHEL (RPM)
+
+```bash
+# Download and install package
+sudo dnf install https://foxzi.github.io/micropanel/rpm/micropanel-1.2.0-1.x86_64.rpm
+
+# Start service
+sudo systemctl enable --now micropanel
 ```
 
 ## Default Credentials
@@ -28,53 +41,66 @@ open http://localhost:8081
 
 ## Configuration
 
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `APP_ENV` | `development` | Environment (development/production) |
-| `APP_PORT` | `8080` | Application port |
-| `APP_SECRET` | - | Session secret key |
-| `DB_PATH` | `./data/micropanel.db` | SQLite database path |
-| `SITES_PATH` | `/var/www/panel/sites` | Sites root directory |
-
-### Configuration File
-
-Copy `config.yaml.example` to `config.yaml` and configure:
+Configuration file: `/etc/micropanel/config.yaml`
 
 ```yaml
 app:
   env: production
   port: 8080
-  secret: your-secret-key
+  secret: auto-generated-on-install
 
 database:
-  path: /app/data/micropanel.db
+  path: /var/lib/micropanel/micropanel.db
 
 sites:
   path: /var/www/panel/sites
 
 nginx:
   config_path: /etc/nginx/sites-enabled
-  reload_cmd: nginx -s reload
+  reload_cmd: sudo nginx -s reload
+
+ssl:
+  email: admin@example.com
+  staging: false
+
+api:
+  enabled: false
+  tokens: []
+
+security:
+  panel_allowed_ips: []
+  api_allowed_ips: []
 ```
 
-## Directory Structure
+## Installation Paths
 
+| Path | Description |
+|------|-------------|
+| `/usr/bin/micropanel` | Binary |
+| `/etc/micropanel/config.yaml` | Configuration |
+| `/var/lib/micropanel/` | Database |
+| `/var/www/panel/sites/` | Site files |
+| `/usr/share/micropanel/` | Migrations, scripts, static |
+
+## Docker (for development)
+
+```bash
+git clone https://github.com/foxzi/micropanel.git
+cd micropanel
+docker compose up -d
 ```
-micropanel/
-├── cmd/micropanel/     # Entry point
-├── internal/           # Internal packages
-│   ├── config/         # Configuration
-│   ├── database/       # Database
-│   ├── handlers/       # HTTP handlers
-│   ├── middleware/     # Middleware
-│   ├── models/         # Data models
-│   ├── repository/     # Repositories
-│   ├── services/       # Business logic
-│   └── templates/      # Templ templates
-├── migrations/         # SQL migrations
-├── web/static/         # Static files
-├── docker/             # Docker files
-└── docs/               # Documentation
+
+Panel available at http://localhost:8081
+
+## Service Management
+
+```bash
+# Status
+sudo systemctl status micropanel
+
+# Restart
+sudo systemctl restart micropanel
+
+# Logs
+sudo journalctl -u micropanel -f
 ```

@@ -2,21 +2,34 @@
 
 ## Требования
 
-- Docker и Docker Compose
-- Git
+- Ubuntu 20.04+ / Debian 11+ / CentOS 8+
+- Nginx
+- Root доступ
 
-## Быстрый старт
+## Установка из пакета (рекомендуется)
+
+### Debian/Ubuntu (APT)
 
 ```bash
-# Клонируйте репозиторий
-git clone https://github.com/foxzi/micropanel.git
-cd micropanel
+# Добавьте репозиторий
+echo "deb [trusted=yes] https://foxzi.github.io/micropanel/apt stable main" | sudo tee /etc/apt/sources.list.d/micropanel.list
 
-# Запустите с Docker Compose
-make dev
+# Установите пакет
+sudo apt update
+sudo apt install micropanel
 
-# Откройте в браузере
-open http://localhost:8081
+# Запустите сервис
+sudo systemctl enable --now micropanel
+```
+
+### CentOS/RHEL (RPM)
+
+```bash
+# Скачайте и установите пакет
+sudo dnf install https://foxzi.github.io/micropanel/rpm/micropanel-1.2.0-1.x86_64.rpm
+
+# Запустите сервис
+sudo systemctl enable --now micropanel
 ```
 
 ## Учетные данные по умолчанию
@@ -28,53 +41,66 @@ open http://localhost:8081
 
 ## Конфигурация
 
-### Переменные окружения
-
-| Переменная | По умолчанию | Описание |
-|------------|--------------|----------|
-| `APP_ENV` | `development` | Окружение (development/production) |
-| `APP_PORT` | `8080` | Порт приложения |
-| `APP_SECRET` | - | Секретный ключ сессий |
-| `DB_PATH` | `./data/micropanel.db` | Путь к базе данных SQLite |
-| `SITES_PATH` | `/var/www/panel/sites` | Корневая директория сайтов |
-
-### Файл конфигурации
-
-Скопируйте `config.yaml.example` в `config.yaml` и настройте:
+Конфигурационный файл: `/etc/micropanel/config.yaml`
 
 ```yaml
 app:
   env: production
   port: 8080
-  secret: ваш-секретный-ключ
+  secret: auto-generated-on-install
 
 database:
-  path: /app/data/micropanel.db
+  path: /var/lib/micropanel/micropanel.db
 
 sites:
   path: /var/www/panel/sites
 
 nginx:
   config_path: /etc/nginx/sites-enabled
-  reload_cmd: nginx -s reload
+  reload_cmd: sudo nginx -s reload
+
+ssl:
+  email: admin@example.com
+  staging: false
+
+api:
+  enabled: false
+  tokens: []
+
+security:
+  panel_allowed_ips: []
+  api_allowed_ips: []
 ```
 
-## Структура директорий
+## Пути установки
 
+| Путь | Описание |
+|------|----------|
+| `/usr/bin/micropanel` | Бинарный файл |
+| `/etc/micropanel/config.yaml` | Конфигурация |
+| `/var/lib/micropanel/` | База данных |
+| `/var/www/panel/sites/` | Файлы сайтов |
+| `/usr/share/micropanel/` | Миграции, скрипты, статика |
+
+## Docker (для разработки)
+
+```bash
+git clone https://github.com/foxzi/micropanel.git
+cd micropanel
+docker compose up -d
 ```
-micropanel/
-├── cmd/micropanel/     # Точка входа
-├── internal/           # Внутренние пакеты
-│   ├── config/         # Конфигурация
-│   ├── database/       # База данных
-│   ├── handlers/       # HTTP обработчики
-│   ├── middleware/     # Middleware
-│   ├── models/         # Модели данных
-│   ├── repository/     # Репозитории
-│   ├── services/       # Бизнес-логика
-│   └── templates/      # Templ шаблоны
-├── migrations/         # SQL миграции
-├── web/static/         # Статические файлы
-├── docker/             # Docker файлы
-└── docs/               # Документация
+
+Панель доступна на http://localhost:8081
+
+## Управление сервисом
+
+```bash
+# Статус
+sudo systemctl status micropanel
+
+# Перезапуск
+sudo systemctl restart micropanel
+
+# Логи
+sudo journalctl -u micropanel -f
 ```
