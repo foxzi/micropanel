@@ -8,10 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- REST API for site management and deployments (POST/GET/DELETE /api/v1/sites, POST /api/v1/sites/:id/deploy)
+- API token authentication via Bearer tokens in Authorization header
+- IP whitelist middleware with CIDR notation support
+- Security configuration for panel and API access restrictions
+- API documentation (docs/ru/api.md, docs/en/api.md)
+- Server info widget on dashboard showing external IP, server name, and notes
+- Server settings page for configuring server name and notes
+- Automatic external IP detection via ifconfig.me on startup
+- Settings table in database for storing server configuration
 - TGZ/tar.gz archive support for deploy (in addition to ZIP)
 - Dark theme support with system preference detection
 - Theme toggle button in navbar
-- Users and Audit Log links in navbar for admins
+- Settings dropdown menu in navbar for admins (Users, Audit Log)
 - Improved UI design with modern styling
 - Sites list pagination (12 per page)
 - Sites search by domain name

@@ -14,6 +14,23 @@ type Config struct {
 	Nginx    NginxConfig    `yaml:"nginx"`
 	SSL      SSLConfig      `yaml:"ssl"`
 	Limits   LimitsConfig   `yaml:"limits"`
+	API      APIConfig      `yaml:"api"`
+	Security SecurityConfig `yaml:"security"`
+}
+
+type APIConfig struct {
+	Enabled bool       `yaml:"enabled"`
+	Tokens  []APIToken `yaml:"tokens"`
+}
+
+type APIToken struct {
+	Name  string `yaml:"name"`
+	Token string `yaml:"token"`
+}
+
+type SecurityConfig struct {
+	PanelAllowedIPs []string `yaml:"panel_allowed_ips"`
+	APIAllowedIPs   []string `yaml:"api_allowed_ips"`
 }
 
 type LimitsConfig struct {
@@ -74,6 +91,14 @@ func Load() (*Config, error) {
 			MaxUploadSize:   10 * 1024 * 1024,  // 10MB
 			MaxSitesPerUser: 0,                 // unlimited
 		},
+		API: APIConfig{
+			Enabled: false,
+			Tokens:  []APIToken{},
+		},
+		Security: SecurityConfig{
+			PanelAllowedIPs: []string{},
+			APIAllowedIPs:   []string{},
+		},
 	}
 
 	// Load from YAML if exists
@@ -130,10 +155,22 @@ func Load() (*Config, error) {
 			cfg.Limits.MaxSitesPerUser = v
 		}
 	}
+	if apiEnabled := os.Getenv("API_ENABLED"); apiEnabled == "true" {
+		cfg.API.Enabled = true
+	}
 
 	return cfg, nil
 }
 
 func (c *Config) IsDevelopment() bool {
 	return c.App.Env == "development"
+}
+
+func (c *Config) ValidateAPIToken(token string) *APIToken {
+	for i := range c.API.Tokens {
+		if c.API.Tokens[i].Token == token {
+			return &c.API.Tokens[i]
+		}
+	}
+	return nil
 }

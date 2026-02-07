@@ -14,6 +14,7 @@ services:
       - NGINX_CONFIG_PATH=/etc/nginx/sites-enabled
     volumes:
       - ./data:/app/data
+      - ./config.yaml:/app/config.yaml:ro
       - sites_data:/var/www/panel/sites
       - nginx_sites:/etc/nginx/sites-enabled
     expose:

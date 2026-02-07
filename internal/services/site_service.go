@@ -75,6 +75,10 @@ func (s *SiteService) List(user *models.User) ([]*models.Site, error) {
 	return s.siteRepo.ListByOwner(user.ID)
 }
 
+func (s *SiteService) ListAll() ([]*models.Site, error) {
+	return s.siteRepo.ListAll()
+}
+
 func (s *SiteService) ListPaginated(user *models.User, search string, page, limit int) ([]*models.Site, error) {
 	if user.IsAdmin() {
 		return s.siteRepo.ListAllPaginated(search, page, limit)

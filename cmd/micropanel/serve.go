@@ -54,9 +54,12 @@ func runServe(cmd *cobra.Command, args []string) {
 	redirectRepo := repository.NewRedirectRepository(db)
 	authZoneRepo := repository.NewAuthZoneRepository(db)
 	auditRepo := repository.NewAuditRepository(db)
+	settingsRepo := repository.NewSettingsRepository(db)
 
 	auditService := services.NewAuditService(auditRepo)
 	authService := services.NewAuthService(userRepo, sessionRepo)
+	settingsService := services.NewSettingsService(settingsRepo)
+	go settingsService.FetchExternalIP()
 	siteService := services.NewSiteService(siteRepo, domainRepo, cfg)
 	nginxService := services.NewNginxService(cfg, siteRepo, domainRepo)
 	nginxService.SetRedirectRepo(redirectRepo)
@@ -68,8 +71,9 @@ func runServe(cmd *cobra.Command, args []string) {
 	fileService := services.NewFileService(cfg)
 
 	authHandler := handlers.NewAuthHandler(authService, auditService)
-	siteHandler := handlers.NewSiteHandler(siteService, deployService, redirectService, authZoneService, auditService)
+	siteHandler := handlers.NewSiteHandler(siteService, deployService, redirectService, authZoneService, auditService, settingsService)
 	domainHandler := handlers.NewDomainHandler(domainRepo, siteService, nginxService, auditService)
+	settingsHandler := handlers.NewSettingsHandler(settingsService, auditService)
 	deployHandler := handlers.NewDeployHandler(deployService, siteService, auditService)
 	sslHandler := handlers.NewSSLHandler(sslService, siteService, auditService)
 	redirectHandler := handlers.NewRedirectHandler(redirectService, siteService, auditService)
@@ -77,6 +81,7 @@ func runServe(cmd *cobra.Command, args []string) {
 	fileHandler := handlers.NewFileHandler(fileService, siteService, auditService)
 	auditHandler := handlers.NewAuditHandler(auditService, userRepo)
 	userHandler := handlers.NewUserHandler(userRepo, auditService)
+	apiHandler := handlers.NewAPIHandler(siteService, deployService, auditService)
 
 	if !cfg.IsDevelopment() {
 		gin.SetMode(gin.ReleaseMode)
@@ -87,13 +92,17 @@ func runServe(cmd *cobra.Command, args []string) {
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)
 	apiLimiter := middleware.NewRateLimiter(100, time.Minute)
 
-	r.Use(middleware.CSRF())
-	r.Static("/static", "./web/static")
+	// Panel routes with IP whitelist
+	panelGroup := r.Group("/")
+	panelGroup.Use(middleware.IPWhitelist(cfg.Security.PanelAllowedIPs))
+	panelGroup.Use(middleware.CSRF())
 
-	r.GET("/login", authHandler.LoginPage)
-	r.POST("/login", loginLimiter.Middleware(), authHandler.Login)
+	panelGroup.Static("/static", "./web/static")
 
-	protected := r.Group("/")
+	panelGroup.GET("/login", authHandler.LoginPage)
+	panelGroup.POST("/login", loginLimiter.Middleware(), authHandler.Login)
+
+	protected := panelGroup.Group("/")
 	protected.Use(middleware.Auth(authService))
 	protected.Use(apiLimiter.Middleware())
 	{
@@ -140,6 +149,9 @@ func runServe(cmd *cobra.Command, args []string) {
 		protected.GET("/audit", auditHandler.List)
 		protected.GET("/api/audit", auditHandler.ListAPI)
 
+		protected.GET("/settings", settingsHandler.Page)
+		protected.POST("/settings", settingsHandler.Update)
+
 		protected.GET("/users", userHandler.List)
 		protected.POST("/users", userHandler.Create)
 		protected.POST("/users/:id", userHandler.Update)
@@ -148,6 +160,21 @@ func runServe(cmd *cobra.Command, args []string) {
 
 		protected.GET("/profile", userHandler.Profile)
 		protected.POST("/profile/password", userHandler.ChangePassword)
+	}
+
+	// API routes
+	if cfg.API.Enabled {
+		apiGroup := r.Group("/api/v1")
+		apiGroup.Use(middleware.IPWhitelist(cfg.Security.APIAllowedIPs))
+		apiGroup.Use(middleware.APIToken(cfg.API.Tokens))
+		apiGroup.Use(apiLimiter.Middleware())
+		{
+			apiGroup.POST("/sites", apiHandler.CreateSite)
+			apiGroup.GET("/sites", apiHandler.ListSites)
+			apiGroup.GET("/sites/:id", apiHandler.GetSite)
+			apiGroup.DELETE("/sites/:id", apiHandler.DeleteSite)
+			apiGroup.POST("/sites/:id/deploy", apiHandler.Deploy)
+		}
 	}
 
 	quit := make(chan os.Signal, 1)
