@@ -1,6 +1,9 @@
 name: Packages
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -13,6 +16,9 @@ permissions:
   pages: write
   id-token: write
 
+env:
+  VERSION: ${{ github.event.inputs.version || github.ref_name }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,6 +27,14 @@ jobs:
         arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set version
+        id: version
+        run: |
+          # Remove 'v' prefix if present
+          VERSION="${{ env.VERSION }}"
+          VERSION="${VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -47,8 +61,8 @@ jobs:
       - name: Build packages
         run: |
           mkdir -p dist
-          VERSION=${{ github.event.inputs.version }} GOARCH=${{ matrix.arch }} nfpm pkg --packager deb --target dist/
-          VERSION=${{ github.event.inputs.version }} GOARCH=${{ matrix.arch }} nfpm pkg --packager rpm --target dist/
+          VERSION=${{ steps.version.outputs.version }} GOARCH=${{ matrix.arch }} nfpm pkg --packager deb --target dist/
+          VERSION=${{ steps.version.outputs.version }} GOARCH=${{ matrix.arch }} nfpm pkg --packager rpm --target dist/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -62,6 +76,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set version
+        id: version
+        run: |
+          VERSION="${{ env.VERSION }}"
+          VERSION="${VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -71,8 +92,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: MicroPanel v${{ github.event.inputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
+          name: MicroPanel v${{ steps.version.outputs.version }}
           generate_release_notes: true
           files: dist/*
 
@@ -85,6 +106,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set version
+        id: version
+        run: |
+          VERSION="${{ env.VERSION }}"
+          VERSION="${VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -93,7 +121,7 @@ jobs:
 
       - name: Generate APT repository
         run: |
-          VERSION=${{ github.event.inputs.version }}
+          VERSION=${{ steps.version.outputs.version }}
 
           # Create APT repo structure
           mkdir -p _site/apt/pool/main
