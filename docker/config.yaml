@@ -1,0 +1,29 @@
+app:
+  env: development
+  host: 0.0.0.0
+  port: 8080
+  secret: docker-dev-secret-change-in-production
+  panel_domain: localhost
+
+database:
+  path: /app/data/micropanel.db
+
+sites:
+  path: /var/www/panel/sites
+
+nginx:
+  config_path: /etc/nginx/sites-enabled
+  reload_cmd: nginx -s reload
+
+ssl:
+  email: admin@localhost
+  staging: true
+
+api:
+  enabled: true
+  tokens:
+    - dev-token-for-testing
+
+security:
+  panel_allowed_ips: []
+  api_allowed_ips: []

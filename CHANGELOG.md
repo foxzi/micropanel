@@ -9,10 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - certbot and python3-certbot-nginx as package dependencies
+- Docker entrypoint script that auto-creates admin user
+- Docker-specific config.yaml with development settings
 
 ### Changed
 - setup-panel-nginx.sh now automatically obtains SSL certificate via certbot
 - Use --no-ssl flag to skip SSL certificate generation
+- Docker now uses dedicated config instead of local config.yaml
 
 ## [1.2.2] - 2026-02-08
 

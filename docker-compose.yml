@@ -6,15 +6,11 @@ services:
     container_name: micropanel-app
     restart: unless-stopped
     environment:
-      - APP_ENV=development
-      - APP_PORT=8080
-      - APP_SECRET=change-me-in-production
-      - DB_PATH=/app/data/micropanel.db
-      - SITES_PATH=/var/www/panel/sites
-      - NGINX_CONFIG_PATH=/etc/nginx/sites-enabled
+      - ADMIN_EMAIL=admin@localhost
+      - ADMIN_PASSWORD=admin
     volumes:
       - ./data:/app/data
-      - ./config.yaml:/app/config.yaml:ro
+      - ./docker/config.yaml:/app/config.yaml:ro
       - sites_data:/var/www/panel/sites
       - nginx_sites:/etc/nginx/sites-enabled
     expose:

@@ -37,9 +37,13 @@ COPY --from=builder /app/migrations ./migrations
 # Copy static files
 COPY --from=builder /app/web ./web
 
+# Copy entrypoint
+COPY docker/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Create directories
 RUN mkdir -p /var/www/panel/sites /app/data
 
 EXPOSE 8080
 
-CMD ["./micropanel", "serve"]
+ENTRYPOINT ["/app/entrypoint.sh"]
