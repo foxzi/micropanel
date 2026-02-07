@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- certbot and python3-certbot-nginx as package dependencies
+
 ### Changed
 - setup-panel-nginx.sh now automatically obtains SSL certificate via certbot
 - Use --no-ssl flag to skip SSL certificate generation

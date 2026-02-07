@@ -127,11 +127,11 @@ overrides:
     depends:
       - nginx
       - openssl
-    recommends:
       - certbot
+      - python3-certbot-nginx
   rpm:
     depends:
       - nginx
       - openssl
-    recommends:
       - certbot
+      - python3-certbot-nginx
