@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - setup-panel-nginx.sh now automatically obtains SSL certificate via certbot
 - Use --no-ssl flag to skip SSL certificate generation
 - Docker now uses dedicated config instead of local config.yaml
+- Updated GitHub Pages with new installation instructions
 
 ## [1.2.2] - 2026-02-08
 

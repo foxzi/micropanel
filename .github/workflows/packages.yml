@@ -232,15 +232,19 @@ jobs:
 
             <div class="card">
               <h2>Post-install</h2>
-              <pre># Configure
-          sudo nano /etc/micropanel/micropanel.env
+              <pre># 1. Set panel domain
+          sudo nano /etc/micropanel/config.yaml
+          # Set: panel_domain: panel.example.com
 
-          # Start service
-          sudo systemctl enable --now micropanel
+          # 2. Create admin user
+          sudo micropanel user create -e admin@example.com -p yourpassword -r admin
 
-          # Check status
-          sudo systemctl status micropanel</pre>
-              <p>Default login: <code>admin@localhost</code> / <code>admin</code></p>
+          # 3. Setup nginx and SSL
+          sudo /usr/share/micropanel/scripts/setup-panel-nginx.sh
+
+          # 4. Start service
+          sudo systemctl enable --now micropanel</pre>
+              <p><strong>Note:</strong> Service will not start until steps 1-2 are completed!</p>
             </div>
 
             <div class="card">
