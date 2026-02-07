@@ -92,7 +92,7 @@ func runServe(cmd *cobra.Command, args []string) {
 	fileService := services.NewFileService(cfg)
 
 	authHandler := handlers.NewAuthHandler(authService, auditService)
-	siteHandler := handlers.NewSiteHandler(siteService, deployService, redirectService, authZoneService, auditService, settingsService, nginxService)
+	siteHandler := handlers.NewSiteHandler(siteService, deployService, redirectService, authZoneService, auditService, settingsService, nginxService, sslService)
 	domainHandler := handlers.NewDomainHandler(domainRepo, siteService, nginxService, auditService)
 	settingsHandler := handlers.NewSettingsHandler(settingsService, auditService)
 	deployHandler := handlers.NewDeployHandler(deployService, siteService, auditService)

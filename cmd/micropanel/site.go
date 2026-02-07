@@ -72,7 +72,7 @@ func init() {
 	siteCreateCmd.MarkFlagRequired("owner")
 }
 
-func getSiteService() (*services.SiteService, *repository.SiteRepository, func()) {
+func getSiteService() (*services.SiteService, *repository.SiteRepository, *services.NginxService, *services.SSLService, func()) {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
@@ -86,12 +86,14 @@ func getSiteService() (*services.SiteService, *repository.SiteRepository, func()
 	siteRepo := repository.NewSiteRepository(db)
 	domainRepo := repository.NewDomainRepository(db)
 	siteService := services.NewSiteService(siteRepo, domainRepo, cfg)
+	nginxService := services.NewNginxService(cfg, siteRepo, domainRepo)
+	sslService := services.NewSSLService(cfg, siteRepo, domainRepo, nginxService)
 
-	return siteService, siteRepo, func() { db.Close() }
+	return siteService, siteRepo, nginxService, sslService, func() { db.Close() }
 }
 
 func runSiteList(cmd *cobra.Command, args []string) {
-	_, repo, cleanup := getSiteService()
+	_, repo, _, _, cleanup := getSiteService()
 	defer cleanup()
 
 	sites, err := repo.ListAll()
@@ -121,12 +123,27 @@ func runSiteList(cmd *cobra.Command, args []string) {
 }
 
 func runSiteCreate(cmd *cobra.Command, args []string) {
-	svc, _, cleanup := getSiteService()
+	svc, _, nginxSvc, sslSvc, cleanup := getSiteService()
 	defer cleanup()
+
+	// Check if site with this name already exists
+	if existing, _ := svc.GetByName(siteName); existing != nil {
+		log.Fatalf("Site with domain '%s' already exists", siteName)
+	}
 
 	site, err := svc.Create(siteName, siteOwnerID)
 	if err != nil {
 		log.Fatalf("Failed to create site: %v", err)
+	}
+
+	// Generate nginx config
+	if err := nginxSvc.WriteConfig(site.ID); err != nil {
+		log.Printf("Warning: failed to generate nginx config: %v", err)
+	}
+
+	// Issue SSL certificate
+	if err := sslSvc.IssueCertificate(site.ID); err != nil {
+		log.Printf("Warning: failed to issue SSL certificate: %v", err)
 	}
 
 	fmt.Printf("Site '%s' created successfully (ID: %d)\n", siteName, site.ID)
@@ -138,13 +155,16 @@ func runSiteDelete(cmd *cobra.Command, args []string) {
 		log.Fatalf("Invalid site ID: %s", args[0])
 	}
 
-	svc, repo, cleanup := getSiteService()
+	svc, repo, nginxSvc, _, cleanup := getSiteService()
 	defer cleanup()
 
 	site, err := repo.GetByID(siteID)
 	if err != nil {
 		log.Fatalf("Site not found: %d", siteID)
 	}
+
+	// Remove nginx config
+	nginxSvc.RemoveConfig(site.ID)
 
 	if err := svc.Delete(site.ID); err != nil {
 		log.Fatalf("Failed to delete site: %v", err)
@@ -159,7 +179,7 @@ func runSiteEnable(cmd *cobra.Command, args []string) {
 		log.Fatalf("Invalid site ID: %s", args[0])
 	}
 
-	_, repo, cleanup := getSiteService()
+	_, repo, nginxSvc, _, cleanup := getSiteService()
 	defer cleanup()
 
 	site, err := repo.GetByID(siteID)
@@ -172,6 +192,9 @@ func runSiteEnable(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed to enable site: %v", err)
 	}
 
+	// Regenerate nginx config
+	nginxSvc.WriteConfig(site.ID)
+
 	fmt.Printf("Site '%s' enabled\n", site.Name)
 }
 
@@ -181,7 +204,7 @@ func runSiteDisable(cmd *cobra.Command, args []string) {
 		log.Fatalf("Invalid site ID: %s", args[0])
 	}
 
-	_, repo, cleanup := getSiteService()
+	_, repo, nginxSvc, _, cleanup := getSiteService()
 	defer cleanup()
 
 	site, err := repo.GetByID(siteID)
@@ -193,6 +216,9 @@ func runSiteDisable(cmd *cobra.Command, args []string) {
 	if err := repo.Update(site); err != nil {
 		log.Fatalf("Failed to disable site: %v", err)
 	}
+
+	// Regenerate nginx config
+	nginxSvc.WriteConfig(site.ID)
 
 	fmt.Printf("Site '%s' disabled\n", site.Name)
 }

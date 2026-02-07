@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.9] - 2026-02-08
+
+### Added
+- Auto-generate SSL certificate when creating site
+- CLI site commands now also generate nginx config and SSL
+
+### Fixed
+- Prevent creating sites with duplicate domains
+- CLI site create/delete/enable/disable now properly manage nginx configs
+
+## [1.2.8] - 2026-02-08
+
+### Fixed
+- Remove empty css directory from package build
+
 ## [1.2.7] - 2026-02-08
 
 ### Fixed

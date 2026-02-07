@@ -20,9 +20,10 @@ type SiteHandler struct {
 	auditService    *services.AuditService
 	settingsService *services.SettingsService
 	nginxService    *services.NginxService
+	sslService      *services.SSLService
 }
 
-func NewSiteHandler(siteService *services.SiteService, deployService *services.DeployService, redirectService *services.RedirectService, authZoneService *services.AuthZoneService, auditService *services.AuditService, settingsService *services.SettingsService, nginxService *services.NginxService) *SiteHandler {
+func NewSiteHandler(siteService *services.SiteService, deployService *services.DeployService, redirectService *services.RedirectService, authZoneService *services.AuthZoneService, auditService *services.AuditService, settingsService *services.SettingsService, nginxService *services.NginxService, sslService *services.SSLService) *SiteHandler {
 	return &SiteHandler{
 		siteService:     siteService,
 		deployService:   deployService,
@@ -31,6 +32,7 @@ func NewSiteHandler(siteService *services.SiteService, deployService *services.D
 		auditService:    auditService,
 		settingsService: settingsService,
 		nginxService:    nginxService,
+		sslService:      sslService,
 	}
 }
 
@@ -77,6 +79,12 @@ func (h *SiteHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Check if site with this domain already exists
+	if existing, _ := h.siteService.GetByName(name); existing != nil {
+		c.String(http.StatusConflict, "Site with this domain already exists")
+		return
+	}
+
 	site, err := h.siteService.Create(name, user.ID)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Error creating site")
@@ -85,6 +93,9 @@ func (h *SiteHandler) Create(c *gin.Context) {
 
 	// Generate nginx config
 	h.nginxService.WriteConfig(site.ID)
+
+	// Issue SSL certificate (async, don't fail if it fails)
+	go h.sslService.IssueCertificate(site.ID)
 
 	// Log site creation
 	h.auditService.LogUser(user.ID, services.ActionSiteCreate, services.EntitySite, &site.ID, map[string]string{"name": name}, ip)
