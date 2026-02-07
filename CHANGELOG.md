@@ -8,13 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Removed default admin user (admin@localhost)
-- Service now requires configuration before starting
-- Startup validation checks for panel_domain and admin user
-- Clear error messages in logs when configuration is incomplete
-
-### Removed
-- Default user creation in migrations
+- setup-panel-nginx.sh now automatically obtains SSL certificate via certbot
+- Use --no-ssl flag to skip SSL certificate generation
 
 ## [1.2.2] - 2026-02-08
 

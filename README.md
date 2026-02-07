@@ -60,7 +60,7 @@ sudo nano /etc/micropanel/config.yaml
 # 2. Create admin user
 sudo micropanel user create -e admin@example.com -p yourpassword -r admin
 
-# 3. Setup nginx
+# 3. Setup nginx and SSL
 sudo /usr/share/micropanel/scripts/setup-panel-nginx.sh
 
 # 4. Start service

@@ -42,14 +42,12 @@ sudo nano /etc/micropanel/config.yaml
 # 2. Создайте администратора
 sudo micropanel user create -e admin@example.com -p ваш_пароль -r admin
 
-# 3. Настройте nginx
+# 3. Настройте nginx и SSL
 sudo /usr/share/micropanel/scripts/setup-panel-nginx.sh
+# Или без SSL: sudo /usr/share/micropanel/scripts/setup-panel-nginx.sh --no-ssl
 
 # 4. Запустите сервис
 sudo systemctl enable --now micropanel
-
-# 5. (Опционально) Включите SSL
-sudo certbot --nginx -d panel.example.com
 ```
 
 **Важно:** Сервис не запустится, пока не будут выполнены шаги 1 и 2!
