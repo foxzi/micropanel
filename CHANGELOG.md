@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-02-07
+
 ### Added
 - REST API for site management and deployments (POST/GET/DELETE /api/v1/sites, POST /api/v1/sites/:id/deploy)
 - API token authentication via Bearer tokens in Authorization header
@@ -17,13 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Server settings page for configuring server name and notes
 - Automatic external IP detection via ifconfig.me on startup
 - Settings table in database for storing server configuration
-- TGZ/tar.gz archive support for deploy (in addition to ZIP)
-- Dark theme support with system preference detection
-- Theme toggle button in navbar
-- Settings dropdown menu in navbar for admins (Users, Audit Log)
-- Improved UI design with modern styling
-- Sites list pagination (12 per page)
-- Sites search by domain name
+
+### Fixed
+- Generate nginx config when creating site via API
 - Project structure initialization
 - Go module setup with Gin, Templ, HTMX stack
 - SQLite database with golang-migrate migrations
