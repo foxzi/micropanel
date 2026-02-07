@@ -19,9 +19,10 @@ type SiteHandler struct {
 	authZoneService *services.AuthZoneService
 	auditService    *services.AuditService
 	settingsService *services.SettingsService
+	nginxService    *services.NginxService
 }
 
-func NewSiteHandler(siteService *services.SiteService, deployService *services.DeployService, redirectService *services.RedirectService, authZoneService *services.AuthZoneService, auditService *services.AuditService, settingsService *services.SettingsService) *SiteHandler {
+func NewSiteHandler(siteService *services.SiteService, deployService *services.DeployService, redirectService *services.RedirectService, authZoneService *services.AuthZoneService, auditService *services.AuditService, settingsService *services.SettingsService, nginxService *services.NginxService) *SiteHandler {
 	return &SiteHandler{
 		siteService:     siteService,
 		deployService:   deployService,
@@ -29,6 +30,7 @@ func NewSiteHandler(siteService *services.SiteService, deployService *services.D
 		authZoneService: authZoneService,
 		auditService:    auditService,
 		settingsService: settingsService,
+		nginxService:    nginxService,
 	}
 }
 
@@ -80,6 +82,9 @@ func (h *SiteHandler) Create(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "Error creating site")
 		return
 	}
+
+	// Generate nginx config
+	h.nginxService.WriteConfig(site.ID)
 
 	// Log site creation
 	h.auditService.LogUser(user.ID, services.ActionSiteCreate, services.EntitySite, &site.ID, map[string]string{"name": name}, ip)
@@ -163,6 +168,11 @@ func (h *SiteHandler) Update(c *gin.Context) {
 		return
 	}
 
+	// Regenerate nginx config if relevant fields changed
+	if oldName != site.Name || oldEnabled != site.IsEnabled || oldWWWAlias != site.WWWAlias {
+		h.nginxService.WriteConfig(site.ID)
+	}
+
 	// Log site update
 	if oldName != site.Name || oldEnabled != site.IsEnabled || oldWWWAlias != site.WWWAlias {
 		h.auditService.LogUser(user.ID, services.ActionSiteUpdate, services.EntitySite, &site.ID, map[string]interface{}{
@@ -228,6 +238,9 @@ func (h *SiteHandler) Delete(c *gin.Context) {
 	}
 
 	siteName := site.Name
+
+	// Remove nginx config first
+	h.nginxService.RemoveConfig(id)
 
 	if err := h.siteService.Delete(id); err != nil {
 		c.String(http.StatusInternalServerError, "Error deleting site")

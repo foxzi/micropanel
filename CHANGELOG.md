@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Generate nginx config when creating site via UI (was only working via API)
+- Regenerate nginx config when updating site settings
+- Remove nginx config when deleting site
+
 ## [1.2.5] - 2026-02-08
 
 ### Fixed
