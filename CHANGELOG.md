@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.10] - 2026-02-08
+
+### Fixed
+- SSL certificate generation now uses --nginx method instead of --webroot
+
 ## [1.2.9] - 2026-02-08
 
 ### Added

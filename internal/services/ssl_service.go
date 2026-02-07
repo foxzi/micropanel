@@ -68,11 +68,9 @@ func (s *SSLService) IssueCertificate(siteID int64) error {
 		domainArgs = append(domainArgs, "-d", h)
 	}
 
-	// Run certbot (cert-name is the primary domain)
+	// Run certbot with nginx plugin
 	args := []string{
-		"certonly",
-		"--webroot",
-		"--webroot-path", "/var/www/certbot",
+		"--nginx",
 		"--email", s.config.SSL.Email,
 		"--agree-tos",
 		"--no-eff-email",
