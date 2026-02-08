@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- API Token management via web panel (all users can create and manage their own tokens)
+- Database storage for API tokens with last_used_at tracking
 - Unit tests for models, services, handlers, config, middleware
 - Input validation for nginx config injection prevention (domains, paths, URLs, auth realms)
 - Security tests for path traversal, nginx injection, XSS, cookie security

@@ -76,10 +76,12 @@ func runServe(cmd *cobra.Command, args []string) {
 	authZoneRepo := repository.NewAuthZoneRepository(db)
 	auditRepo := repository.NewAuditRepository(db)
 	settingsRepo := repository.NewSettingsRepository(db)
+	apiTokenRepo := repository.NewAPITokenRepository(db)
 
 	auditService := services.NewAuditService(auditRepo)
 	authService := services.NewAuthService(userRepo, sessionRepo)
 	settingsService := services.NewSettingsService(settingsRepo)
+	apiTokenService := services.NewAPITokenService(apiTokenRepo)
 	go settingsService.FetchExternalIP()
 	siteService := services.NewSiteService(siteRepo, domainRepo, cfg)
 	nginxService := services.NewNginxService(cfg, siteRepo, domainRepo)
@@ -102,6 +104,7 @@ func runServe(cmd *cobra.Command, args []string) {
 	fileHandler := handlers.NewFileHandler(fileService, siteService, auditService)
 	auditHandler := handlers.NewAuditHandler(auditService, userRepo)
 	userHandler := handlers.NewUserHandler(userRepo, auditService)
+	apiTokenHandler := handlers.NewAPITokenHandler(apiTokenService, auditService)
 	apiHandler := handlers.NewAPIHandler(siteService, deployService, nginxService, sslService, auditService)
 
 	if !cfg.IsDevelopment() {
@@ -191,13 +194,17 @@ func runServe(cmd *cobra.Command, args []string) {
 
 		protected.GET("/profile", userHandler.Profile)
 		protected.POST("/profile/password", userHandler.ChangePassword)
+
+		protected.GET("/api-tokens", apiTokenHandler.List)
+		protected.POST("/api-tokens", apiTokenHandler.Create)
+		protected.DELETE("/api-tokens/:id", apiTokenHandler.Delete)
 	}
 
 	// API routes
 	if cfg.API.Enabled {
 		apiGroup := r.Group("/api/v1")
 		apiGroup.Use(middleware.IPWhitelistOptional(cfg.Security.APIAllowedIPs))
-		apiGroup.Use(middleware.APIToken(cfg.API.Tokens))
+		apiGroup.Use(middleware.APIToken(cfg.API.Tokens, apiTokenService))
 		apiGroup.Use(apiLimiter.Middleware())
 		{
 			apiGroup.POST("/sites", apiHandler.CreateSite)
