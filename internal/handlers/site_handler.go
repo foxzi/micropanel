@@ -131,6 +131,11 @@ func (h *SiteHandler) View(c *gin.Context) {
 		return
 	}
 
+	// Update SSL status from certificate file
+	h.sslService.CheckAndUpdateSSLStatus(id)
+	// Reload site to get updated SSL info
+	site, _ = h.siteService.GetByID(id)
+
 	// Get deploy history
 	deploys, _ := h.deployService.ListDeploys(id, 10)
 	canRollback := h.deployService.HasPreviousVersion(id)

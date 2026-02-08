@@ -14,6 +14,7 @@ micropanel ALL=(ALL) NOPASSWD: /usr/bin/certbot
 micropanel ALL=(ALL) NOPASSWD: /usr/sbin/nginx
 micropanel ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/nginx/sites-enabled/*
 micropanel ALL=(ALL) NOPASSWD: /usr/bin/rm -f /etc/nginx/sites-enabled/*
+micropanel ALL=(ALL) NOPASSWD: /usr/bin/cat /etc/letsencrypt/live/*/fullchain.pem
 EOF
 chmod 440 /etc/sudoers.d/micropanel
 

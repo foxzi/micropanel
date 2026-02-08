@@ -31,7 +31,7 @@ func (s *SiteService) Create(name string, ownerID int64) (*models.Site, error) {
 		Name:      name,
 		OwnerID:   ownerID,
 		IsEnabled: true,
-		WWWAlias:  true, // www alias enabled by default
+		WWWAlias:  false, // www alias disabled by default
 	}
 
 	if err := s.siteRepo.Create(site); err != nil {

@@ -5,7 +5,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -110,7 +109,7 @@ func (s *SSLService) IssueCertificate(siteID int64) error {
 func (s *SSLService) GetCertificateExpiry(domain string) (*time.Time, error) {
 	certPath := filepath.Join("/etc/letsencrypt/live", domain, "fullchain.pem")
 
-	certPEM, err := os.ReadFile(certPath)
+	certPEM, err := s.readCertFile(certPath)
 	if err != nil {
 		return nil, ErrCertNotFound
 	}
@@ -132,7 +131,7 @@ func (s *SSLService) GetCertificateExpiry(domain string) (*time.Time, error) {
 func (s *SSLService) GetCertificateInfo(domain string) (*CertificateInfo, error) {
 	certPath := filepath.Join("/etc/letsencrypt/live", domain, "fullchain.pem")
 
-	certPEM, err := os.ReadFile(certPath)
+	certPEM, err := s.readCertFile(certPath)
 	if err != nil {
 		return nil, ErrCertNotFound
 	}
@@ -156,6 +155,16 @@ func (s *SSLService) GetCertificateInfo(domain string) (*CertificateInfo, error)
 		IsExpired:       time.Now().After(cert.NotAfter),
 		DaysUntilExpiry: int(time.Until(cert.NotAfter).Hours() / 24),
 	}, nil
+}
+
+// readCertFile reads a certificate file using sudo (micropanel user has no direct access)
+func (s *SSLService) readCertFile(path string) ([]byte, error) {
+	cmd := exec.Command("sudo", "/usr/bin/cat", path)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	return output, nil
 }
 
 // CheckAndUpdateSSLStatus checks certificate status for a site and updates DB

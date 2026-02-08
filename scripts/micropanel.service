@@ -12,7 +12,6 @@ Restart=on-failure
 RestartSec=5
 
 # Security
-NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/micropanel /var/www/panel/sites /etc/nginx/sites-enabled

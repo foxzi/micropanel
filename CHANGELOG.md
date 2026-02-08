@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.13] - 2026-02-08
+
+### Changed
+- WWW alias now disabled by default when creating sites
+- Removed NoNewPrivileges from systemd service (required for sudo)
+
+### Fixed
+- SSL certificate status now readable via sudo cat
+- SSL status auto-updates when viewing site page
+
 ## [1.2.12] - 2026-02-08
 
 ### Fixed
