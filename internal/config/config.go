@@ -24,8 +24,9 @@ type APIConfig struct {
 }
 
 type APIToken struct {
-	Name  string `yaml:"name"`
-	Token string `yaml:"token"`
+	Name   string `yaml:"name"`
+	Token  string `yaml:"token"`
+	UserID int64  `yaml:"user_id"` // Owner of sites created with this token (0 = admin/user 1)
 }
 
 type SecurityConfig struct {

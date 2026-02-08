@@ -20,10 +20,10 @@ func TestIPWhitelist(t *testing.T) {
 		wantStatus int
 	}{
 		{
-			name:       "empty whitelist allows all",
+			name:       "empty whitelist blocks all (secure default)",
 			allowedIPs: []string{},
 			clientIP:   "192.168.1.100",
-			wantStatus: http.StatusOK,
+			wantStatus: http.StatusForbidden,
 		},
 		{
 			name:       "exact IP match",
@@ -73,6 +73,54 @@ func TestIPWhitelist(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			router := gin.New()
 			router.Use(IPWhitelist(tt.allowedIPs))
+			router.GET("/test", func(c *gin.Context) {
+				c.Status(http.StatusOK)
+			})
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("GET", "/test", nil)
+			req.RemoteAddr = tt.clientIP + ":12345"
+
+			router.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestIPWhitelistOptional(t *testing.T) {
+	tests := []struct {
+		name       string
+		allowedIPs []string
+		clientIP   string
+		wantStatus int
+	}{
+		{
+			name:       "empty whitelist allows all (optional mode)",
+			allowedIPs: []string{},
+			clientIP:   "192.168.1.100",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "exact IP match",
+			allowedIPs: []string{"192.168.1.100"},
+			clientIP:   "192.168.1.100",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "IP not in whitelist",
+			allowedIPs: []string{"192.168.1.100"},
+			clientIP:   "192.168.1.101",
+			wantStatus: http.StatusForbidden,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router := gin.New()
+			router.Use(IPWhitelistOptional(tt.allowedIPs))
 			router.GET("/test", func(c *gin.Context) {
 				c.Status(http.StatusOK)
 			})

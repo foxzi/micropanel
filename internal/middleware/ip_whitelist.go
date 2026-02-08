@@ -8,8 +8,19 @@ import (
 )
 
 // IPWhitelist returns middleware that restricts access to allowed IPs/CIDRs.
-// If allowedIPs is empty, all IPs are allowed.
+// If allowedIPs is empty, all IPs are BLOCKED (secure default).
+// Use IPWhitelistOptional for cases where empty whitelist should allow all.
 func IPWhitelist(allowedIPs []string) gin.HandlerFunc {
+	return ipWhitelistMiddleware(allowedIPs, false)
+}
+
+// IPWhitelistOptional returns middleware that restricts access to allowed IPs/CIDRs.
+// If allowedIPs is empty, all IPs are ALLOWED (for optional restrictions).
+func IPWhitelistOptional(allowedIPs []string) gin.HandlerFunc {
+	return ipWhitelistMiddleware(allowedIPs, true)
+}
+
+func ipWhitelistMiddleware(allowedIPs []string, allowEmptyList bool) gin.HandlerFunc {
 	// Parse CIDRs once at initialization
 	var networks []*net.IPNet
 	var ips []net.IP
@@ -30,9 +41,13 @@ func IPWhitelist(allowedIPs []string) gin.HandlerFunc {
 	}
 
 	return func(c *gin.Context) {
-		// Empty whitelist = allow all
+		// Handle empty whitelist based on mode
 		if len(networks) == 0 && len(ips) == 0 {
-			c.Next()
+			if allowEmptyList {
+				c.Next()
+				return
+			}
+			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 

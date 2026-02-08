@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Input validation for nginx config injection prevention (domains, paths, URLs, auth realms)
 - Security tests for path traversal, nginx injection, XSS, cookie security
 
+### Changed
+- API tokens now support `user_id` field to associate with specific users
+- IP whitelist now blocks by default when empty (use IPWhitelistOptional for allow-all)
+
 ### Fixed
 - Path traversal vulnerability in file manager (use filepath.Rel instead of HasPrefix)
 - Session and CSRF cookies now set Secure flag when behind HTTPS
@@ -19,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Domain alias hostname validation (nginx config injection prevention)
 - SVG files served as text/plain to prevent stored XSS
 - Added Content-Security-Policy and X-Content-Type-Options headers for file preview
+- API IDOR: ListSites/GetSite/DeleteSite/Deploy now check ownership
+- API sites created with token's user_id instead of hardcoded admin
+- Htpasswd files now created with 0600 permissions instead of 0644
 
 ## [1.2.14] - 2026-02-08
 

@@ -113,9 +113,9 @@ func runServe(cmd *cobra.Command, args []string) {
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)
 	apiLimiter := middleware.NewRateLimiter(100, time.Minute)
 
-	// Panel routes with IP whitelist
+	// Panel routes with IP whitelist (optional - empty list allows all for backward compat)
 	panelGroup := r.Group("/")
-	panelGroup.Use(middleware.IPWhitelist(cfg.Security.PanelAllowedIPs))
+	panelGroup.Use(middleware.IPWhitelistOptional(cfg.Security.PanelAllowedIPs))
 	panelGroup.Use(middleware.CSRF())
 
 	// Try multiple static paths
@@ -196,7 +196,7 @@ func runServe(cmd *cobra.Command, args []string) {
 	// API routes
 	if cfg.API.Enabled {
 		apiGroup := r.Group("/api/v1")
-		apiGroup.Use(middleware.IPWhitelist(cfg.Security.APIAllowedIPs))
+		apiGroup.Use(middleware.IPWhitelistOptional(cfg.Security.APIAllowedIPs))
 		apiGroup.Use(middleware.APIToken(cfg.API.Tokens))
 		apiGroup.Use(apiLimiter.Middleware())
 		{

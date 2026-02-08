@@ -244,7 +244,7 @@ func (s *AuthZoneService) regenerateHtpasswd(siteID, zoneID int64) error {
 		content += "\n"
 	}
 
-	if err := os.WriteFile(htpasswdPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(htpasswdPath, []byte(content), 0600); err != nil {
 		return fmt.Errorf("write htpasswd: %w", err)
 	}
 

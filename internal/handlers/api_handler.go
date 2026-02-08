@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"micropanel/internal/middleware"
+	"micropanel/internal/models"
 	"micropanel/internal/services"
 )
 
@@ -49,6 +50,16 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
+// getTokenUserID returns the user ID associated with the API token.
+// Falls back to user ID 1 (admin) if not specified.
+func getTokenUserID(c *gin.Context) int64 {
+	token := middleware.GetAPIToken(c)
+	if token != nil && token.UserID > 0 {
+		return token.UserID
+	}
+	return 1 // Default to admin
+}
+
 // CreateSite creates a new site via API.
 // POST /api/v1/sites
 func (h *APIHandler) CreateSite(c *gin.Context) {
@@ -64,8 +75,9 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 		return
 	}
 
-	// Use owner_id = 1 (admin) for API-created sites
-	site, err := h.siteService.Create(req.Name, 1)
+	// Use token's user_id for ownership
+	ownerID := getTokenUserID(c)
+	site, err := h.siteService.Create(req.Name, ownerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to create site"})
 		return
@@ -99,10 +111,20 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 	})
 }
 
-// ListSites returns all sites.
+// ListSites returns sites owned by the token's user.
 // GET /api/v1/sites
 func (h *APIHandler) ListSites(c *gin.Context) {
-	sites, err := h.siteService.ListAll()
+	userID := getTokenUserID(c)
+
+	// User ID 1 (admin) can see all sites, others see only their own
+	var sites []*models.Site
+	var err error
+	if userID == 1 {
+		sites, err = h.siteService.ListAll()
+	} else {
+		sites, err = h.siteService.ListByOwner(userID)
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to list sites"})
 		return
@@ -125,6 +147,16 @@ func (h *APIHandler) ListSites(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// canAccessSite checks if the API token user can access the site.
+func (h *APIHandler) canAccessSite(c *gin.Context, site *models.Site) bool {
+	userID := getTokenUserID(c)
+	// Admin (user_id=1) can access all sites
+	if userID == 1 {
+		return true
+	}
+	return site.OwnerID == userID
+}
+
 // GetSite returns a single site by ID.
 // GET /api/v1/sites/:id
 func (h *APIHandler) GetSite(c *gin.Context) {
@@ -137,6 +169,12 @@ func (h *APIHandler) GetSite(c *gin.Context) {
 	site, err := h.siteService.GetByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, errorResponse{Error: "site not found"})
+		return
+	}
+
+	// Check access
+	if !h.canAccessSite(c, site) {
+		c.JSON(http.StatusForbidden, errorResponse{Error: "access denied"})
 		return
 	}
 
@@ -160,6 +198,12 @@ func (h *APIHandler) DeleteSite(c *gin.Context) {
 	site, err := h.siteService.GetByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, errorResponse{Error: "site not found"})
+		return
+	}
+
+	// Check access
+	if !h.canAccessSite(c, site) {
+		c.JSON(http.StatusForbidden, errorResponse{Error: "access denied"})
 		return
 	}
 
@@ -199,6 +243,12 @@ func (h *APIHandler) Deploy(c *gin.Context) {
 		return
 	}
 
+	// Check access
+	if !h.canAccessSite(c, site) {
+		c.JSON(http.StatusForbidden, errorResponse{Error: "access denied"})
+		return
+	}
+
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "file is required"})
@@ -206,8 +256,9 @@ func (h *APIHandler) Deploy(c *gin.Context) {
 	}
 	defer file.Close()
 
-	// Deploy using admin user ID (1) for API deploys
-	deploy, err := h.deployService.Deploy(site.ID, 1, header.Filename, file, header.Size)
+	// Deploy using token's user ID
+	userID := getTokenUserID(c)
+	deploy, err := h.deployService.Deploy(site.ID, userID, header.Filename, file, header.Size)
 	if err != nil {
 		status := http.StatusInternalServerError
 		errMsg := "deploy failed"
