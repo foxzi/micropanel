@@ -457,11 +457,15 @@ func (h *FileHandler) Preview(c *gin.Context) {
 	case ".webp":
 		contentType = "image/webp"
 	case ".svg":
-		contentType = "image/svg+xml"
+		// Serve SVG as text/plain to prevent XSS via embedded scripts
+		contentType = "text/plain; charset=utf-8"
 	case ".ico":
 		contentType = "image/x-icon"
 	}
 
+	// Add security headers for user-uploaded content
+	c.Header("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'")
+	c.Header("X-Content-Type-Options", "nosniff")
 	c.Data(http.StatusOK, contentType, content)
 }
 

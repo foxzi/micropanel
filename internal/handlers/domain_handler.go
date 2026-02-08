@@ -10,6 +10,7 @@ import (
 	"micropanel/internal/models"
 	"micropanel/internal/repository"
 	"micropanel/internal/services"
+	"micropanel/internal/validators"
 )
 
 type DomainHandler struct {
@@ -52,6 +53,12 @@ func (h *DomainHandler) Create(c *gin.Context) {
 	hostname := c.PostForm("hostname")
 	if hostname == "" {
 		c.String(http.StatusBadRequest, "Hostname is required")
+		return
+	}
+
+	// Validate hostname for nginx config safety
+	if err := validators.ValidateDomain(hostname); err != nil {
+		c.String(http.StatusBadRequest, "Invalid hostname: "+err.Error())
 		return
 	}
 

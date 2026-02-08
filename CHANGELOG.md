@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Path traversal vulnerability in file manager (use filepath.Rel instead of HasPrefix)
 - Session and CSRF cookies now set Secure flag when behind HTTPS
 - Session and CSRF cookies now set SameSite=Lax attribute
+- Domain alias hostname validation (nginx config injection prevention)
+- SVG files served as text/plain to prevent stored XSS
+- Added Content-Security-Policy and X-Content-Type-Options headers for file preview
 
 ## [1.2.14] - 2026-02-08
 
