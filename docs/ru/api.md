@@ -58,9 +58,16 @@ POST /api/v1/sites
 **Тело запроса:**
 ```json
 {
-  "name": "example.com"
+  "name": "example.com",
+  "ssl": true
 }
 ```
+
+**Параметры:**
+| Параметр | Тип | Обязательный | По умолчанию | Описание |
+|----------|-----|--------------|--------------|----------|
+| name | string | да | - | Доменное имя сайта |
+| ssl | bool | нет | true | Автоматически выпустить SSL-сертификат |
 
 **Ответ (201 Created):**
 ```json
@@ -71,6 +78,8 @@ POST /api/v1/sites
   "ssl_enabled": false
 }
 ```
+
+> **Примечание:** `ssl_enabled` в ответе показывает текущий статус. Сертификат выпускается асинхронно, поэтому сразу после создания будет `false`. Статус обновится после успешного выпуска сертификата.
 
 **Ошибки:**
 - `400 Bad Request` - name не указан
@@ -167,11 +176,17 @@ POST /api/v1/sites/:id/deploy
 ### cURL
 
 ```bash
-# Создать сайт
+# Создать сайт с SSL (по умолчанию)
 curl -X POST http://localhost:8080/api/v1/sites \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
   -d '{"name": "example.com"}'
+
+# Создать сайт без SSL
+curl -X POST http://localhost:8080/api/v1/sites \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "example.com", "ssl": false}'
 
 # Список сайтов
 curl http://localhost:8080/api/v1/sites \

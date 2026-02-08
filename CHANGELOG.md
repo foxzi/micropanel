@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.14] - 2026-02-08
+
+### Added
+- API: SSL certificate auto-issue when creating site (param `ssl`, default: true)
+
 ## [1.2.13] - 2026-02-08
 
 ### Changed

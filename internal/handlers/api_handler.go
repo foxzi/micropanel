@@ -14,20 +14,23 @@ type APIHandler struct {
 	siteService   *services.SiteService
 	deployService *services.DeployService
 	nginxService  *services.NginxService
+	sslService    *services.SSLService
 	auditService  *services.AuditService
 }
 
-func NewAPIHandler(siteService *services.SiteService, deployService *services.DeployService, nginxService *services.NginxService, auditService *services.AuditService) *APIHandler {
+func NewAPIHandler(siteService *services.SiteService, deployService *services.DeployService, nginxService *services.NginxService, sslService *services.SSLService, auditService *services.AuditService) *APIHandler {
 	return &APIHandler{
 		siteService:   siteService,
 		deployService: deployService,
 		nginxService:  nginxService,
+		sslService:    sslService,
 		auditService:  auditService,
 	}
 }
 
 type createSiteRequest struct {
 	Name string `json:"name" binding:"required"`
+	SSL  *bool  `json:"ssl"` // optional, default true
 }
 
 type siteResponse struct {
@@ -70,6 +73,12 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 
 	// Generate nginx config
 	h.nginxService.WriteConfig(site.ID)
+
+	// Issue SSL certificate if requested (default: true)
+	issueSSL := req.SSL == nil || *req.SSL
+	if issueSSL {
+		go h.sslService.IssueCertificate(site.ID)
+	}
 
 	// Log via audit
 	token := middleware.GetAPIToken(c)

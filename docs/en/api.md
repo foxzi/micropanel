@@ -58,9 +58,16 @@ POST /api/v1/sites
 **Request body:**
 ```json
 {
-  "name": "example.com"
+  "name": "example.com",
+  "ssl": true
 }
 ```
+
+**Parameters:**
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| name | string | yes | - | Site domain name |
+| ssl | bool | no | true | Automatically issue SSL certificate |
 
 **Response (201 Created):**
 ```json
@@ -71,6 +78,8 @@ POST /api/v1/sites
   "ssl_enabled": false
 }
 ```
+
+> **Note:** `ssl_enabled` in response shows current status. Certificate is issued asynchronously, so it will be `false` right after creation. Status will update after successful certificate issuance.
 
 **Errors:**
 - `400 Bad Request` - name not provided
@@ -167,11 +176,17 @@ POST /api/v1/sites/:id/deploy
 ### cURL
 
 ```bash
-# Create site
+# Create site with SSL (default)
 curl -X POST http://localhost:8080/api/v1/sites \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
   -d '{"name": "example.com"}'
+
+# Create site without SSL
+curl -X POST http://localhost:8080/api/v1/sites \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "example.com", "ssl": false}'
 
 # List sites
 curl http://localhost:8080/api/v1/sites \
