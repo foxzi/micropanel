@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-02-09
+
 ### Added
 - API Token management via web panel (all users can create and manage their own tokens)
 - Database storage for API tokens with last_used_at tracking
