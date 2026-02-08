@@ -77,8 +77,14 @@ func (s *FileService) ValidatePath(siteID int64, relativePath string) (string, e
 		return "", ErrFileInvalidPath
 	}
 
-	// Check if path is within base directory
-	if !strings.HasPrefix(absPath, absBase) {
+	// Check if path is within base directory using filepath.Rel
+	relPath, err := filepath.Rel(absBase, absPath)
+	if err != nil {
+		return "", ErrFilePathTraversal
+	}
+
+	// If relPath starts with "..", then absPath is outside absBase
+	if strings.HasPrefix(relPath, "..") {
 		return "", ErrFilePathTraversal
 	}
 

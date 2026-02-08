@@ -12,6 +12,7 @@ import (
 	"micropanel/internal/config"
 	"micropanel/internal/models"
 	"micropanel/internal/repository"
+	"micropanel/internal/validators"
 )
 
 var (
@@ -205,10 +206,10 @@ func (s *AuthZoneService) DeleteUser(userID int64) error {
 // Helper functions
 
 func (s *AuthZoneService) validateZone(pathPrefix, realm string) error {
-	if !strings.HasPrefix(pathPrefix, "/") {
+	if err := validators.ValidatePath(pathPrefix); err != nil {
 		return ErrInvalidPathPrefix
 	}
-	if realm == "" {
+	if err := validators.ValidateAuthRealm(realm); err != nil {
 		return ErrInvalidRealm
 	}
 	return nil

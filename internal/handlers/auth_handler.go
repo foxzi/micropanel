@@ -48,15 +48,18 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// Log successful login
 	h.auditService.LogUser(session.UserID, services.ActionLogin, services.EntityUser, &session.UserID, nil, ip)
 
-	c.SetCookie(
-		services.SessionCookieKey,
-		session.ID,
-		int(services.SessionDuration.Seconds()),
-		"/",
-		"",
-		false,
-		true,
-	)
+	// Detect if running behind HTTPS (reverse proxy sets X-Forwarded-Proto)
+	secure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
+
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     services.SessionCookieKey,
+		Value:    session.ID,
+		MaxAge:   int(services.SessionDuration.Seconds()),
+		Path:     "/",
+		Secure:   secure,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 
 	// HTMX redirect
 	if c.GetHeader("HX-Request") == "true" {
@@ -82,7 +85,18 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		h.auditService.LogUser(user.ID, services.ActionLogout, services.EntityUser, &user.ID, nil, ip)
 	}
 
-	c.SetCookie(services.SessionCookieKey, "", -1, "/", "", false, true)
+	// Detect if running behind HTTPS (reverse proxy sets X-Forwarded-Proto)
+	secure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
+
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     services.SessionCookieKey,
+		Value:    "",
+		MaxAge:   -1,
+		Path:     "/",
+		Secure:   secure,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 
 	// HTMX redirect
 	if c.GetHeader("HX-Request") == "true" {

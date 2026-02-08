@@ -2,10 +2,10 @@ package services
 
 import (
 	"errors"
-	"strings"
 
 	"micropanel/internal/models"
 	"micropanel/internal/repository"
+	"micropanel/internal/validators"
 )
 
 var (
@@ -110,11 +110,11 @@ func (s *RedirectService) validateRedirect(sourcePath, targetURL string, code in
 		return ErrInvalidRedirectCode
 	}
 
-	if !strings.HasPrefix(sourcePath, "/") {
+	if err := validators.ValidatePath(sourcePath); err != nil {
 		return ErrInvalidSourcePath
 	}
 
-	if targetURL == "" {
+	if err := validators.ValidateRedirectURL(targetURL); err != nil {
 		return ErrInvalidTargetURL
 	}
 

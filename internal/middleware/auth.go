@@ -22,7 +22,17 @@ func Auth(authService *services.AuthService) gin.HandlerFunc {
 
 		user, err := authService.ValidateSession(sessionID)
 		if err != nil {
-			c.SetCookie(services.SessionCookieKey, "", -1, "/", "", false, true)
+			// Detect if running behind HTTPS
+			secure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
+			http.SetCookie(c.Writer, &http.Cookie{
+				Name:     services.SessionCookieKey,
+				Value:    "",
+				MaxAge:   -1,
+				Path:     "/",
+				Secure:   secure,
+				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
+			})
 			c.Redirect(http.StatusFound, "/login")
 			c.Abort()
 			return

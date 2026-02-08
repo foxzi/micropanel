@@ -23,7 +23,17 @@ func CSRF() gin.HandlerFunc {
 		token, err := c.Cookie(CSRFCookieKey)
 		if err != nil || len(token) != CSRFTokenLength*2 {
 			token = generateCSRFToken()
-			c.SetCookie(CSRFCookieKey, token, 86400, "/", "", false, false)
+			// Detect if running behind HTTPS
+			secure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
+			http.SetCookie(c.Writer, &http.Cookie{
+				Name:     CSRFCookieKey,
+				Value:    token,
+				MaxAge:   86400,
+				Path:     "/",
+				Secure:   secure,
+				HttpOnly: false, // CSRF token needs to be readable by JavaScript
+				SameSite: http.SameSiteLaxMode,
+			})
 		}
 
 		// Store token in context for templates

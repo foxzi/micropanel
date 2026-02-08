@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Unit tests for models, services, handlers, config, middleware
+- Input validation for nginx config injection prevention (domains, paths, URLs, auth realms)
+
+### Fixed
+- Path traversal vulnerability in file manager (use filepath.Rel instead of HasPrefix)
+- Session and CSRF cookies now set Secure flag when behind HTTPS
+- Session and CSRF cookies now set SameSite=Lax attribute
 
 ## [1.2.14] - 2026-02-08
 

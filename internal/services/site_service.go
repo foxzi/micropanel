@@ -10,6 +10,7 @@ import (
 	"micropanel/internal/config"
 	"micropanel/internal/models"
 	"micropanel/internal/repository"
+	"micropanel/internal/validators"
 )
 
 type SiteService struct {
@@ -27,6 +28,11 @@ func NewSiteService(siteRepo *repository.SiteRepository, domainRepo *repository.
 }
 
 func (s *SiteService) Create(name string, ownerID int64) (*models.Site, error) {
+	// Validate domain name
+	if err := validators.ValidateDomain(name); err != nil {
+		return nil, fmt.Errorf("invalid domain: %w", err)
+	}
+
 	site := &models.Site{
 		Name:      name,
 		OwnerID:   ownerID,
