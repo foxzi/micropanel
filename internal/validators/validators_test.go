@@ -137,3 +137,97 @@ func TestValidateAuthRealm(t *testing.T) {
 		})
 	}
 }
+
+// TestNginxConfigInjection tests various nginx config injection attempts
+func TestNginxConfigInjection(t *testing.T) {
+	// These payloads attempt to break out of nginx config context
+	injectionPayloads := []string{
+		"example.com; location /evil { }",
+		"example.com\nserver { listen 8080; }",
+		"example.com\r\nlocation /pwned { }",
+		"example.com' or '1'='1",
+		`example.com"; return 200 "pwned`,
+		"example.com`id`",
+		"example.com${PATH}",
+		"example.com{return 200;}",
+		"example.com\\nserver{}",
+	}
+
+	t.Run("domain injection", func(t *testing.T) {
+		for _, payload := range injectionPayloads {
+			if err := ValidateDomain(payload); err == nil {
+				t.Errorf("ValidateDomain should reject injection payload: %q", payload)
+			}
+		}
+	})
+
+	t.Run("path injection", func(t *testing.T) {
+		pathPayloads := []string{
+			"/admin; return 200 pwned;",
+			"/admin\nlocation /evil { }",
+			"/admin' or '1'='1",
+			`/admin"; } server { listen 8080;`,
+			"/admin`whoami`",
+			"/admin$request_uri",
+			"/admin{return 200;}",
+		}
+		for _, payload := range pathPayloads {
+			if err := ValidatePath(payload); err == nil {
+				t.Errorf("ValidatePath should reject injection payload: %q", payload)
+			}
+		}
+	})
+
+	t.Run("redirect URL injection", func(t *testing.T) {
+		urlPayloads := []string{
+			"https://evil.com; return 200 pwned",
+			"https://evil.com\nX-Injected: true",
+			"https://evil.com\r\nSet-Cookie: admin=true",
+			"javascript:alert(document.cookie)",
+			"data:text/html,<script>alert(1)</script>",
+			"vbscript:msgbox(1)",
+			"https://evil.com`id`",
+			"https://evil.com{malicious}",
+		}
+		for _, payload := range urlPayloads {
+			if err := ValidateRedirectURL(payload); err == nil {
+				t.Errorf("ValidateRedirectURL should reject injection payload: %q", payload)
+			}
+		}
+	})
+
+	t.Run("auth realm injection", func(t *testing.T) {
+		realmPayloads := []string{
+			`Restricted"; auth_basic off; #`,
+			"Admin\nauth_basic off;",
+			"Admin; deny all;",
+			"Admin`id`",
+			"Admin${PATH}",
+		}
+		for _, payload := range realmPayloads {
+			if err := ValidateAuthRealm(payload); err == nil {
+				t.Errorf("ValidateAuthRealm should reject injection payload: %q", payload)
+			}
+		}
+	})
+}
+
+// TestXSSPayloads tests that XSS payloads are rejected
+func TestXSSPayloads(t *testing.T) {
+	xssPayloads := []string{
+		"javascript:alert(1)",
+		"javascript:alert(document.cookie)",
+		"JAVASCRIPT:alert(1)",
+		"data:text/html,<script>alert(1)</script>",
+		"DATA:text/html,<script>alert(1)</script>",
+		"vbscript:msgbox(1)",
+	}
+
+	for _, payload := range xssPayloads {
+		t.Run(payload, func(t *testing.T) {
+			if err := ValidateRedirectURL(payload); err == nil {
+				t.Errorf("ValidateRedirectURL should reject XSS payload: %q", payload)
+			}
+		})
+	}
+}

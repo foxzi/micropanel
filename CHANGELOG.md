@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Unit tests for models, services, handlers, config, middleware
 - Input validation for nginx config injection prevention (domains, paths, URLs, auth realms)
+- Security tests for path traversal, nginx injection, XSS, cookie security
 
 ### Fixed
 - Path traversal vulnerability in file manager (use filepath.Rel instead of HasPrefix)
