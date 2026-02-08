@@ -51,18 +51,34 @@ type errorResponse struct {
 }
 
 // getTokenUserID returns the user ID associated with the API token.
-// Falls back to user ID 1 (admin) if not specified.
+// Returns 0 if token has no user_id configured (caller must handle this).
 func getTokenUserID(c *gin.Context) int64 {
 	token := middleware.GetAPIToken(c)
 	if token != nil && token.UserID > 0 {
 		return token.UserID
 	}
-	return 1 // Default to admin
+	return 0 // No user_id configured
+}
+
+// requireTokenUserID returns the user ID or aborts with error if not configured.
+func requireTokenUserID(c *gin.Context) (int64, bool) {
+	userID := getTokenUserID(c)
+	if userID == 0 {
+		c.JSON(http.StatusForbidden, errorResponse{Error: "API token must have user_id configured"})
+		return 0, false
+	}
+	return userID, true
 }
 
 // CreateSite creates a new site via API.
 // POST /api/v1/sites
 func (h *APIHandler) CreateSite(c *gin.Context) {
+	// Require token with user_id
+	ownerID, ok := requireTokenUserID(c)
+	if !ok {
+		return
+	}
+
 	var req createSiteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "name is required"})
@@ -75,8 +91,6 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 		return
 	}
 
-	// Use token's user_id for ownership
-	ownerID := getTokenUserID(c)
 	site, err := h.siteService.Create(req.Name, ownerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to create site"})
@@ -116,6 +130,12 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 func (h *APIHandler) ListSites(c *gin.Context) {
 	userID := getTokenUserID(c)
 
+	// Token without user_id cannot list sites
+	if userID == 0 {
+		c.JSON(http.StatusForbidden, errorResponse{Error: "API token must have user_id configured"})
+		return
+	}
+
 	// User ID 1 (admin) can see all sites, others see only their own
 	var sites []*models.Site
 	var err error
@@ -150,6 +170,10 @@ func (h *APIHandler) ListSites(c *gin.Context) {
 // canAccessSite checks if the API token user can access the site.
 func (h *APIHandler) canAccessSite(c *gin.Context, site *models.Site) bool {
 	userID := getTokenUserID(c)
+	// Token without user_id has no access
+	if userID == 0 {
+		return false
+	}
 	// Admin (user_id=1) can access all sites
 	if userID == 1 {
 		return true

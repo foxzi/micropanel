@@ -66,12 +66,21 @@ func (h *DeployHandler) Upload(c *gin.Context) {
 	// Deploy
 	deploy, err := h.deployService.Deploy(siteID, user.ID, header.Filename, file, header.Size)
 	if err != nil {
-		if deploy != nil {
-			// Deploy record was created but failed
-			c.String(http.StatusInternalServerError, "Deploy failed: %s", err.Error())
-		} else {
-			c.String(http.StatusInternalServerError, "Deploy failed: %s", err.Error())
+		// Return user-friendly error messages without exposing internals
+		errMsg := "Deploy failed"
+		switch err {
+		case services.ErrArchiveTooLarge:
+			errMsg = "Archive is too large"
+		case services.ErrTooManyFiles:
+			errMsg = "Too many files in archive"
+		case services.ErrUnsupportedArchive:
+			errMsg = "Unsupported archive format"
+		case services.ErrPathTraversal:
+			errMsg = "Invalid file paths in archive"
+		case services.ErrSymlinkDetected:
+			errMsg = "Symlinks are not allowed in archive"
 		}
+		c.String(http.StatusInternalServerError, errMsg)
 		return
 	}
 

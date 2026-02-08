@@ -45,7 +45,7 @@ func (h *SSLHandler) Issue(c *gin.Context) {
 	}
 
 	if err := h.sslService.IssueCertificate(siteID); err != nil {
-		c.String(http.StatusInternalServerError, "SSL issue failed: %s", err.Error())
+		c.String(http.StatusInternalServerError, "SSL certificate issue failed")
 		return
 	}
 
@@ -71,7 +71,7 @@ func (h *SSLHandler) Renew(c *gin.Context) {
 	}
 
 	if err := h.sslService.RenewCertificates(); err != nil {
-		c.String(http.StatusInternalServerError, "SSL renewal failed: %s", err.Error())
+		c.String(http.StatusInternalServerError, "SSL certificate renewal failed")
 		return
 	}
 

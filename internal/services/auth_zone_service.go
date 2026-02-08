@@ -122,7 +122,8 @@ func (s *AuthZoneService) Toggle(id int64) error {
 // User management
 
 func (s *AuthZoneService) CreateUser(zoneID int64, username, password string) (*models.AuthZoneUser, error) {
-	if username == "" {
+	// Validate username for htpasswd format
+	if err := validators.ValidateHtpasswdUsername(username); err != nil {
 		return nil, ErrInvalidUsername
 	}
 	if password == "" {

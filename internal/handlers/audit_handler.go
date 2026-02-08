@@ -37,7 +37,7 @@ func (h *AuditHandler) List(c *gin.Context) {
 
 	logs, total, err := h.auditService.List(page, perPage)
 	if err != nil {
-		c.HTML(http.StatusInternalServerError, "", gin.H{"error": err.Error()})
+		c.HTML(http.StatusInternalServerError, "", gin.H{"error": "Failed to load audit logs"})
 		return
 	}
 
@@ -73,7 +73,7 @@ func (h *AuditHandler) ListAPI(c *gin.Context) {
 
 	logs, total, err := h.auditService.List(page, perPage)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load audit logs"})
 		return
 	}
 

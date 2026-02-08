@@ -151,3 +151,33 @@ func containsDangerousChars(s string) bool {
 	}
 	return false
 }
+
+var (
+	ErrInvalidUsername = errors.New("invalid username")
+	// htpasswd username: alphanumeric, underscore, hyphen, dot (no colons, newlines, spaces)
+	usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_\-\.]+$`)
+)
+
+// ValidateHtpasswdUsername validates a username for htpasswd file format
+func ValidateHtpasswdUsername(username string) error {
+	if username == "" {
+		return ErrInvalidUsername
+	}
+
+	// Check length
+	if len(username) > 255 {
+		return ErrInvalidUsername
+	}
+
+	// Username cannot contain colon (htpasswd delimiter) or newline
+	if strings.Contains(username, ":") || strings.Contains(username, "\n") || strings.Contains(username, "\r") {
+		return ErrInvalidUsername
+	}
+
+	// Validate format
+	if !usernameRegex.MatchString(username) {
+		return ErrInvalidUsername
+	}
+
+	return nil
+}

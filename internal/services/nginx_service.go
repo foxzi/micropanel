@@ -284,12 +284,20 @@ func (s *NginxService) ApplyConfig(siteID int64) error {
 	// Test nginx config
 	if err := s.TestConfig(); err != nil {
 		// Rollback on failure
+		var rollbackErr error
 		if len(existingConfig) > 0 {
 			cmd := exec.Command("sudo", "tee", configPath)
 			cmd.Stdin = strings.NewReader(string(existingConfig))
-			cmd.Run()
+			if output, cmdErr := cmd.CombinedOutput(); cmdErr != nil {
+				rollbackErr = fmt.Errorf("rollback failed: %s", string(output))
+			}
 		} else {
-			exec.Command("sudo", "rm", "-f", configPath).Run()
+			if output, cmdErr := exec.Command("sudo", "rm", "-f", configPath).CombinedOutput(); cmdErr != nil {
+				rollbackErr = fmt.Errorf("rollback cleanup failed: %s", string(output))
+			}
+		}
+		if rollbackErr != nil {
+			return fmt.Errorf("config test failed and rollback failed: %w (rollback: %v)", err, rollbackErr)
 		}
 		return fmt.Errorf("config test failed, rolled back: %w", err)
 	}

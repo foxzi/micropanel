@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - API tokens now support `user_id` field to associate with specific users
+- API tokens without `user_id` are now rejected (no default to admin)
 - IP whitelist now blocks by default when empty (use IPWhitelistOptional for allow-all)
 
 ### Fixed
@@ -26,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API IDOR: ListSites/GetSite/DeleteSite/Deploy now check ownership
 - API sites created with token's user_id instead of hardcoded admin
 - Htpasswd files now created with 0600 permissions instead of 0644
+- Nginx config rollback now checks for errors
+- Certbot commands now have 5 minute timeout
+- Htpasswd username validation (no special characters)
+- Error messages no longer expose internal details
 
 ## [1.2.14] - 2026-02-08
 

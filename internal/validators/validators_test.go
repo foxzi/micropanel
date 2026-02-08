@@ -212,6 +212,39 @@ func TestNginxConfigInjection(t *testing.T) {
 	})
 }
 
+func TestValidateHtpasswdUsername(t *testing.T) {
+	tests := []struct {
+		username string
+		wantErr  bool
+	}{
+		// Valid usernames
+		{"admin", false},
+		{"user123", false},
+		{"john_doe", false},
+		{"test-user", false},
+		{"user.name", false},
+
+		// Invalid usernames
+		{"", true},
+		{"user:name", true},       // colon is htpasswd delimiter
+		{"user\nname", true},      // newline breaks format
+		{"user\rname", true},      // carriage return
+		{"user name", true},       // space not allowed
+		{"user;name", true},       // special chars
+		{"user'name", true},       // quotes
+		{strings.Repeat("a", 256), true}, // too long
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.username, func(t *testing.T) {
+			err := ValidateHtpasswdUsername(tt.username)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateHtpasswdUsername(%q) error = %v, wantErr %v", tt.username, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // TestXSSPayloads tests that XSS payloads are rejected
 func TestXSSPayloads(t *testing.T) {
 	xssPayloads := []string{

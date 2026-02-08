@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -14,6 +15,24 @@ import (
 	"micropanel/internal/models"
 	"micropanel/internal/repository"
 )
+
+const certbotTimeout = 5 * time.Minute
+
+// runCertbot executes certbot with timeout
+func runCertbot(args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), certbotTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "sudo", append([]string{"certbot"}, args...)...)
+	output, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return output, fmt.Errorf("%w: command timed out after %v", ErrCertbotFailed, certbotTimeout)
+	}
+	if err != nil {
+		return output, fmt.Errorf("%w: %s", ErrCertbotFailed, string(output))
+	}
+	return output, nil
+}
 
 var (
 	ErrCertbotFailed  = errors.New("certbot command failed")
@@ -83,10 +102,8 @@ func (s *SSLService) IssueCertificate(siteID int64) error {
 
 	args = append(args, domainArgs...)
 
-	cmd := exec.Command("sudo", append([]string{"certbot"}, args...)...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%w: %s", ErrCertbotFailed, string(output))
+	if _, err := runCertbot(args...); err != nil {
+		return err
 	}
 
 	// Update site SSL status
@@ -195,10 +212,9 @@ func (s *SSLService) RenewCertificates() error {
 		args = append(args, "--staging")
 	}
 
-	cmd := exec.Command("sudo", append([]string{"certbot"}, args...)...)
-	output, err := cmd.CombinedOutput()
+	output, err := runCertbot(args...)
 	if err != nil {
-		return fmt.Errorf("%w: %s", ErrCertbotFailed, string(output))
+		return err
 	}
 
 	// Check if any certificates were renewed
@@ -225,10 +241,8 @@ func (s *SSLService) RevokeCertificate(siteID int64) error {
 		"--non-interactive",
 	}
 
-	cmd := exec.Command("sudo", append([]string{"certbot"}, args...)...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%w: %s", ErrCertbotFailed, string(output))
+	if _, err := runCertbot(args...); err != nil {
+		return err
 	}
 
 	// Update site SSL status
@@ -259,10 +273,8 @@ func (s *SSLService) DeleteCertificate(siteID int64) error {
 		"--non-interactive",
 	}
 
-	cmd := exec.Command("sudo", append([]string{"certbot"}, args...)...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%w: %s", ErrCertbotFailed, string(output))
+	if _, err := runCertbot(args...); err != nil {
+		return err
 	}
 
 	// Update site SSL status
