@@ -22,7 +22,9 @@ ssl:
 api:
   enabled: true
   tokens:
-    - dev-token-for-testing
+    - name: dev-token
+      token: dev-token-for-testing
+      user_id: 1
 
 security:
   panel_allowed_ips: []

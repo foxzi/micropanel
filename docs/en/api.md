@@ -9,11 +9,7 @@ Add to `config.yaml`:
 ```yaml
 api:
   enabled: true
-  tokens:
-    - name: "deploy-bot"
-      token: "your-secret-token-here"
-    - name: "ci-cd"
-      token: "another-secret-token"
+  tokens: []  # Tokens can be created via web panel
 ```
 
 Or via environment variable:
@@ -21,6 +17,36 @@ Or via environment variable:
 ```bash
 API_ENABLED=true
 ```
+
+## Token Management
+
+### Via Web Panel (Recommended)
+
+All users can create and manage their API tokens through the web panel:
+1. Log in to the panel
+2. Navigate to "API Tokens" in the navigation bar
+3. Click "Create Token" and enter a name
+4. Copy the token (it's only shown once!)
+
+Tokens are associated with the user and only grant access to their sites.
+
+### Via Config File (for backward compatibility)
+
+You can also add tokens in `config.yaml`:
+
+```yaml
+api:
+  enabled: true
+  tokens:
+    - name: "deploy-bot"
+      token: "your-secret-token-here"
+      user_id: 1  # Owner user ID
+    - name: "ci-cd"
+      token: "another-secret-token"
+      user_id: 2
+```
+
+> **Important:** The `user_id` field is required. Tokens without `user_id` will be rejected.
 
 ## Authentication
 
