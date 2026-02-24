@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- SSL certificate issuance race condition: concurrent certbot calls caused "Another instance already running" errors
+- SSL errors silently discarded in fire-and-forget goroutine during site creation
+- SSL handler now returns actual certbot error message instead of generic "issue failed"
+- Nginx config conflict: certbot --nginx modified config which was then overwritten by ApplyConfig
+- Site deletion now cleans up SSL certificates (certbot delete) to prevent orphaned renewal configs
+
+### Changed
+- SSL issuance switched from certbot --nginx to certbot certonly --webroot (no more nginx config conflicts)
+- SSL issuance is now synchronous: web UI redirects to site page, API waits for result
+- Site creation no longer auto-issues SSL; user clicks "Issue SSL" button on site page
+- API site creation with ssl=true now waits for certificate issuance and returns actual SSL status
+- Nginx template: SSL sites now get proper HTTP->HTTPS redirect with ACME challenge passthrough
+- All certbot operations serialized with mutex to prevent lock file conflicts
+- Added slog logging for all SSL operations (issue, renew, revoke, delete)
+- Site creation and update now use ApplyConfig (write + test + reload) instead of WriteConfig
+- Postinstall creates /var/www/certbot directory for webroot ACME challenges
+
 ## [1.3.0] - 2026-02-09
 
 ### Added

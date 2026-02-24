@@ -6,9 +6,11 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"micropanel/internal/config"
@@ -34,8 +36,11 @@ func runCertbot(args ...string) ([]byte, error) {
 	return output, nil
 }
 
+const certbotWebroot = "/var/www/certbot"
+
 var (
 	ErrCertbotFailed  = errors.New("certbot command failed")
+	ErrCertbotBusy    = errors.New("another certbot operation is in progress")
 	ErrNoDomains      = errors.New("no domains configured for site")
 	ErrCertNotFound   = errors.New("certificate not found")
 	ErrDomainNotFound = errors.New("domain not found")
@@ -46,6 +51,7 @@ type SSLService struct {
 	siteRepo     *repository.SiteRepository
 	domainRepo   *repository.DomainRepository
 	nginxService *NginxService
+	certbotMu    sync.Mutex
 }
 
 func NewSSLService(cfg *config.Config, siteRepo *repository.SiteRepository, domainRepo *repository.DomainRepository, nginxService *NginxService) *SSLService {
@@ -57,7 +63,9 @@ func NewSSLService(cfg *config.Config, siteRepo *repository.SiteRepository, doma
 	}
 }
 
-// IssueCertificate requests a new SSL certificate for site (primary domain + www + aliases)
+// IssueCertificate requests a new SSL certificate for site (primary domain + www + aliases).
+// Uses certbot certonly --webroot to avoid conflicts with nginx config management.
+// A mutex ensures only one certbot process runs at a time.
 func (s *SSLService) IssueCertificate(siteID int64) error {
 	site, err := s.siteRepo.GetByID(siteID)
 	if err != nil {
@@ -86,9 +94,17 @@ func (s *SSLService) IssueCertificate(siteID int64) error {
 		domainArgs = append(domainArgs, "-d", h)
 	}
 
-	// Run certbot with nginx plugin
+	// Serialize certbot calls to prevent "Another instance already running" errors
+	s.certbotMu.Lock()
+	defer s.certbotMu.Unlock()
+
+	slog.Info("issuing SSL certificate", "site_id", siteID, "domain", site.Name, "hostnames", hostnames)
+
+	// Run certbot with webroot plugin (doesn't modify nginx config)
 	args := []string{
-		"--nginx",
+		"certonly",
+		"--webroot",
+		"-w", certbotWebroot,
 		"--email", s.config.SSL.Email,
 		"--agree-tos",
 		"--no-eff-email",
@@ -103,6 +119,7 @@ func (s *SSLService) IssueCertificate(siteID int64) error {
 	args = append(args, domainArgs...)
 
 	if _, err := runCertbot(args...); err != nil {
+		slog.Error("certbot failed", "site_id", siteID, "domain", site.Name, "error", err)
 		return err
 	}
 
@@ -114,11 +131,12 @@ func (s *SSLService) IssueCertificate(siteID int64) error {
 		return fmt.Errorf("update site SSL status: %w", err)
 	}
 
-	// Regenerate nginx config with SSL
+	// Regenerate nginx config with SSL block
 	if err := s.nginxService.ApplyConfig(siteID); err != nil {
 		return fmt.Errorf("apply nginx config: %w", err)
 	}
 
+	slog.Info("SSL certificate issued", "site_id", siteID, "domain", site.Name)
 	return nil
 }
 
@@ -206,20 +224,26 @@ func (s *SSLService) CheckAndUpdateSSLStatus(siteID int64) error {
 
 // RenewCertificates runs certbot renew for all certificates
 func (s *SSLService) RenewCertificates() error {
+	s.certbotMu.Lock()
+	defer s.certbotMu.Unlock()
+
 	args := []string{"renew", "--non-interactive"}
 
 	if s.config.SSL.Staging {
 		args = append(args, "--staging")
 	}
 
+	slog.Info("renewing SSL certificates")
+
 	output, err := runCertbot(args...)
 	if err != nil {
+		slog.Error("certbot renew failed", "error", err)
 		return err
 	}
 
 	// Check if any certificates were renewed
 	if strings.Contains(string(output), "renewed") {
-		// Reload nginx to pick up new certificates
+		slog.Info("certificates renewed, reloading nginx")
 		return s.nginxService.Reload()
 	}
 
@@ -233,6 +257,9 @@ func (s *SSLService) RevokeCertificate(siteID int64) error {
 		return err
 	}
 
+	s.certbotMu.Lock()
+	defer s.certbotMu.Unlock()
+
 	certPath := filepath.Join("/etc/letsencrypt/live", site.Name, "cert.pem")
 
 	args := []string{
@@ -241,7 +268,10 @@ func (s *SSLService) RevokeCertificate(siteID int64) error {
 		"--non-interactive",
 	}
 
+	slog.Info("revoking SSL certificate", "site_id", siteID, "domain", site.Name)
+
 	if _, err := runCertbot(args...); err != nil {
+		slog.Error("certbot revoke failed", "site_id", siteID, "error", err)
 		return err
 	}
 
@@ -267,13 +297,19 @@ func (s *SSLService) DeleteCertificate(siteID int64) error {
 		return err
 	}
 
+	s.certbotMu.Lock()
+	defer s.certbotMu.Unlock()
+
 	args := []string{
 		"delete",
 		"--cert-name", site.Name,
 		"--non-interactive",
 	}
 
+	slog.Info("deleting SSL certificate", "site_id", siteID, "domain", site.Name)
+
 	if _, err := runCertbot(args...); err != nil {
+		slog.Error("certbot delete failed", "site_id", siteID, "error", err)
 		return err
 	}
 

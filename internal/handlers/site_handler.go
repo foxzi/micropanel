@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -91,23 +92,24 @@ func (h *SiteHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Generate nginx config
-	h.nginxService.WriteConfig(site.ID)
-
-	// Issue SSL certificate (async, don't fail if it fails)
-	go h.sslService.IssueCertificate(site.ID)
+	// Generate and apply nginx config (write + test + reload)
+	if err := h.nginxService.ApplyConfig(site.ID); err != nil {
+		c.String(http.StatusInternalServerError, "Error applying nginx config")
+		return
+	}
 
 	// Log site creation
 	h.auditService.LogUser(user.ID, services.ActionSiteCreate, services.EntitySite, &site.ID, map[string]string{"name": name}, ip)
 
-	// HTMX refresh
+	// Redirect to site page so user can issue SSL manually
+	siteURL := "/sites/" + strconv.FormatInt(site.ID, 10)
 	if c.GetHeader("HX-Request") == "true" {
-		c.Header("HX-Redirect", "/")
+		c.Header("HX-Redirect", siteURL)
 		c.Status(http.StatusOK)
 		return
 	}
 
-	c.Redirect(http.StatusFound, "/")
+	c.Redirect(http.StatusFound, siteURL)
 }
 
 func (h *SiteHandler) View(c *gin.Context) {
@@ -186,7 +188,7 @@ func (h *SiteHandler) Update(c *gin.Context) {
 
 	// Regenerate nginx config if relevant fields changed
 	if oldName != site.Name || oldEnabled != site.IsEnabled || oldWWWAlias != site.WWWAlias {
-		h.nginxService.WriteConfig(site.ID)
+		h.nginxService.ApplyConfig(site.ID)
 	}
 
 	// Log site update
@@ -255,7 +257,15 @@ func (h *SiteHandler) Delete(c *gin.Context) {
 
 	siteName := site.Name
 
-	// Remove nginx config first
+	// Delete SSL certificate if enabled (before removing site from DB)
+	if site.SSLEnabled {
+		if err := h.sslService.DeleteCertificate(id); err != nil {
+			slog.Error("failed to delete SSL certificate during site deletion", "site_id", id, "error", err)
+			// Continue with deletion — don't block on cert cleanup
+		}
+	}
+
+	// Remove nginx config
 	h.nginxService.RemoveConfig(id)
 
 	if err := h.siteService.Delete(id); err != nil {

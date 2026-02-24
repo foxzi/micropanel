@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -45,7 +47,12 @@ func (h *SSLHandler) Issue(c *gin.Context) {
 	}
 
 	if err := h.sslService.IssueCertificate(siteID); err != nil {
-		c.String(http.StatusInternalServerError, "SSL certificate issue failed")
+		slog.Error("SSL issue failed", "site_id", siteID, "domain", site.Name, "error", err)
+		if errors.Is(err, services.ErrCertbotBusy) {
+			c.String(http.StatusConflict, "Another certificate operation is in progress, please try again later")
+			return
+		}
+		c.String(http.StatusInternalServerError, "SSL certificate issue failed: "+err.Error())
 		return
 	}
 
@@ -71,7 +78,8 @@ func (h *SSLHandler) Renew(c *gin.Context) {
 	}
 
 	if err := h.sslService.RenewCertificates(); err != nil {
-		c.String(http.StatusInternalServerError, "SSL certificate renewal failed")
+		slog.Error("SSL renewal failed", "error", err)
+		c.String(http.StatusInternalServerError, "SSL certificate renewal failed: "+err.Error())
 		return
 	}
 

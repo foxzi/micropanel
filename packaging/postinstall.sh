@@ -7,6 +7,11 @@ chown -R micropanel:micropanel /var/www/panel/sites
 chown root:micropanel /etc/micropanel/config.yaml
 chmod 640 /etc/micropanel/config.yaml
 
+# Create certbot webroot for ACME challenges
+mkdir -p /var/www/certbot
+chown root:root /var/www/certbot
+chmod 755 /var/www/certbot
+
 # Create sudoers file for micropanel user
 cat > /etc/sudoers.d/micropanel <<EOF
 # Allow micropanel to run certbot and nginx without password

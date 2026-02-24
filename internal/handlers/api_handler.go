@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -35,10 +36,10 @@ type createSiteRequest struct {
 }
 
 type siteResponse struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	IsEnabled bool   `json:"is_enabled"`
-	SSLEnabled bool  `json:"ssl_enabled"`
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	IsEnabled  bool   `json:"is_enabled"`
+	SSLEnabled bool   `json:"ssl_enabled"`
 }
 
 type deployResponse struct {
@@ -97,13 +98,21 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 		return
 	}
 
-	// Generate nginx config
-	h.nginxService.WriteConfig(site.ID)
+	// Generate and apply nginx config (write + test + reload)
+	if err := h.nginxService.ApplyConfig(site.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to apply nginx config"})
+		return
+	}
 
 	// Issue SSL certificate if requested (default: true)
 	issueSSL := req.SSL == nil || *req.SSL
 	if issueSSL {
-		go h.sslService.IssueCertificate(site.ID)
+		if err := h.sslService.IssueCertificate(site.ID); err != nil {
+			slog.Error("SSL issuance failed during site creation", "site_id", site.ID, "domain", req.Name, "error", err)
+			// Don't fail site creation, just note SSL didn't work
+		}
+		// Reload site to get updated SSL status
+		site, _ = h.siteService.GetByID(site.ID)
 	}
 
 	// Log via audit
@@ -118,9 +127,9 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 	}, c.ClientIP())
 
 	c.JSON(http.StatusCreated, siteResponse{
-		ID:        site.ID,
-		Name:      site.Name,
-		IsEnabled: site.IsEnabled,
+		ID:         site.ID,
+		Name:       site.Name,
+		IsEnabled:  site.IsEnabled,
 		SSLEnabled: site.SSLEnabled,
 	})
 }
@@ -153,9 +162,9 @@ func (h *APIHandler) ListSites(c *gin.Context) {
 	var response []siteResponse
 	for _, site := range sites {
 		response = append(response, siteResponse{
-			ID:        site.ID,
-			Name:      site.Name,
-			IsEnabled: site.IsEnabled,
+			ID:         site.ID,
+			Name:       site.Name,
+			IsEnabled:  site.IsEnabled,
 			SSLEnabled: site.SSLEnabled,
 		})
 	}
@@ -203,9 +212,9 @@ func (h *APIHandler) GetSite(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, siteResponse{
-		ID:        site.ID,
-		Name:      site.Name,
-		IsEnabled: site.IsEnabled,
+		ID:         site.ID,
+		Name:       site.Name,
+		IsEnabled:  site.IsEnabled,
 		SSLEnabled: site.SSLEnabled,
 	})
 }
@@ -232,6 +241,16 @@ func (h *APIHandler) DeleteSite(c *gin.Context) {
 	}
 
 	siteName := site.Name
+
+	// Delete SSL certificate if enabled (before removing site from DB)
+	if site.SSLEnabled {
+		if err := h.sslService.DeleteCertificate(id); err != nil {
+			slog.Error("failed to delete SSL certificate during site deletion", "site_id", id, "error", err)
+		}
+	}
+
+	// Remove nginx config
+	h.nginxService.RemoveConfig(id)
 
 	if err := h.siteService.Delete(id); err != nil {
 		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to delete site"})
