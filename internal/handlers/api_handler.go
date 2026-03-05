@@ -89,9 +89,14 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 		return
 	}
 
-	// Check if site with this name already exists
+	// If site with this name already exists, return it (idempotent create).
 	if existing, _ := h.siteService.GetByName(req.Name); existing != nil {
-		c.JSON(http.StatusConflict, errorResponse{Error: "site with this name already exists"})
+		c.JSON(http.StatusOK, siteResponse{
+			ID:         existing.ID,
+			Name:       existing.Name,
+			IsEnabled:  existing.IsEnabled,
+			SSLEnabled: existing.SSLEnabled,
+		})
 		return
 	}
 
