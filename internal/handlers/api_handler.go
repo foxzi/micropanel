@@ -1,14 +1,17 @@
 package handlers
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"micropanel/internal/middleware"
 	"micropanel/internal/models"
+	"micropanel/internal/repository"
 	"micropanel/internal/services"
 )
 
@@ -201,7 +204,11 @@ func (h *APIHandler) GetSite(c *gin.Context) {
 
 	site, err := h.siteService.GetByID(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, errorResponse{Error: "site not found"})
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, errorResponse{Error: "site not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to load site"})
 		return
 	}
 
@@ -230,7 +237,11 @@ func (h *APIHandler) DeleteSite(c *gin.Context) {
 
 	site, err := h.siteService.GetByID(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, errorResponse{Error: "site not found"})
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, errorResponse{Error: "site not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to load site"})
 		return
 	}
 
@@ -280,10 +291,30 @@ func (h *APIHandler) Deploy(c *gin.Context) {
 		return
 	}
 
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "file is required"})
+		return
+	}
+	defer file.Close()
+
 	site, err := h.siteService.GetByID(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, errorResponse{Error: "site not found"})
-		return
+		if errors.Is(err, repository.ErrNotFound) {
+			fallbackSite, fallbackErr := h.resolveSiteFromFilename(c, id, header.Filename)
+			if fallbackErr != nil {
+				c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to resolve site"})
+				return
+			}
+			if fallbackSite == nil {
+				c.JSON(http.StatusNotFound, errorResponse{Error: "site not found"})
+				return
+			}
+			site = fallbackSite
+		} else {
+			c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to load site"})
+			return
+		}
 	}
 
 	// Check access
@@ -291,13 +322,6 @@ func (h *APIHandler) Deploy(c *gin.Context) {
 		c.JSON(http.StatusForbidden, errorResponse{Error: "access denied"})
 		return
 	}
-
-	file, header, err := c.Request.FormFile("file")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, errorResponse{Error: "file is required"})
-		return
-	}
-	defer file.Close()
 
 	// Deploy using token's user ID
 	userID := getTokenUserID(c)
@@ -341,4 +365,64 @@ func (h *APIHandler) Deploy(c *gin.Context) {
 		DeployID: deploy.ID,
 		Status:   string(deploy.Status),
 	})
+}
+
+func (h *APIHandler) resolveSiteFromFilename(c *gin.Context, requestedID int64, filename string) (*models.Site, error) {
+	domain, ok := inferSiteDomainFromArchive(filename)
+	if !ok {
+		return nil, nil
+	}
+
+	site, err := h.siteService.GetByName(domain)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	if !h.canAccessSite(c, site) {
+		return nil, nil
+	}
+
+	slog.Warn("deploy site id fallback used",
+		"requested_site_id", requestedID,
+		"resolved_site_id", site.ID,
+		"domain", domain,
+	)
+	return site, nil
+}
+
+func inferSiteDomainFromArchive(filename string) (string, bool) {
+	base := strings.TrimSuffix(filename, ".zip")
+	if base == filename {
+		base = strings.TrimSuffix(filename, ".tgz")
+	}
+	if base == filename {
+		base = strings.TrimSuffix(filename, ".tar.gz")
+	}
+	if base == filename {
+		return "", false
+	}
+
+	idx := strings.LastIndex(base, "-v")
+	if idx <= 0 {
+		return "", false
+	}
+
+	version := base[idx+2:]
+	if version == "" {
+		return "", false
+	}
+	for _, r := range version {
+		if r < '0' || r > '9' {
+			return "", false
+		}
+	}
+
+	domain := strings.TrimSpace(base[:idx])
+	if domain == "" {
+		return "", false
+	}
+	return domain, true
 }

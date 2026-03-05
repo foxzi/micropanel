@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-03-05
+
+### Fixed
+- API deploy endpoint now handles stale site ID more safely: when site ID is missing, it can resolve target site by archive name (`domain-vN.zip|.tgz|.tar.gz`) and return clearer 500 errors for non-not-found failures.
+
 ### Fixed
 - SSL certificate issuance race condition: concurrent certbot calls caused "Another instance already running" errors
 - SSL errors silently discarded in fire-and-forget goroutine during site creation

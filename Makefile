@@ -1,6 +1,6 @@
 .PHONY: dev build templ migrate-up migrate-down test clean package-deb package-rpm
 
-VERSION ?= 1.0.0
+VERSION ?= 1.3.1
 GOARCH ?= amd64
 
 # Development
@@ -85,5 +85,5 @@ help:
 	@echo "  help         - Show this help"
 	@echo ""
 	@echo "Packaging options:"
-	@echo "  VERSION=1.0.0  - Set package version"
+	@echo "  VERSION=1.3.1  - Set package version"
 	@echo "  GOARCH=amd64   - Set architecture (amd64, arm64)"
