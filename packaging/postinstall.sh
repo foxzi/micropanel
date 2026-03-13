@@ -29,6 +29,11 @@ if grep -q "change-me-min-32-chars" /etc/micropanel/config.yaml 2>/dev/null; the
     sed -i "s/change-me-min-32-chars-random-string/$SECRET/" /etc/micropanel/config.yaml
 fi
 
+# Reload nginx if running (picks up /etc/nginx/conf.d/micropanel.conf)
+if nginx -t 2>/dev/null; then
+    systemctl reload nginx 2>/dev/null || true
+fi
+
 # Reload systemd
 systemctl daemon-reload
 

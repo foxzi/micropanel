@@ -65,6 +65,13 @@ contents:
     file_info:
       mode: 0644
 
+  # Nginx tuning (http-level directives)
+  - src: scripts/nginx-tuning.conf
+    dst: /etc/nginx/conf.d/micropanel.conf
+    type: config|noreplace
+    file_info:
+      mode: 0644
+
   # Systemd services
   - src: scripts/micropanel.service
     dst: /usr/lib/systemd/system/micropanel.service
