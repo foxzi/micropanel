@@ -38,7 +38,7 @@ func NewAPIHandler(siteService *services.SiteService, deployService *services.De
 
 type createSiteRequest struct {
 	Name string `json:"name" binding:"required"`
-	SSL  *bool  `json:"ssl"` // optional, default true
+	SSL  *bool  `json:"ssl"` // optional, default false; if true, issues cert for all hostnames after creation
 }
 
 type siteResponse struct {
@@ -55,6 +55,10 @@ type deployResponse struct {
 
 type errorResponse struct {
 	Error string `json:"error"`
+}
+
+type issueSSLRequest struct {
+	Mode string `json:"mode"` // "all" (default), "primary", "aliases", "none"
 }
 
 type createDomainRequest struct {
@@ -125,9 +129,10 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 		return
 	}
 
-	// Issue SSL certificate if requested (default: true)
-	issueSSL := req.SSL == nil || *req.SSL
-	if issueSSL {
+	// Issue SSL certificate if explicitly requested (default: false)
+	// For most use cases, SSL should be issued separately via POST /api/v1/sites/:id/ssl
+	// with the desired mode (all/primary/aliases).
+	if req.SSL != nil && *req.SSL {
 		if err := h.sslService.IssueCertificate(site.ID); err != nil {
 			slog.Error("SSL issuance failed during site creation", "site_id", site.ID, "domain", req.Name, "error", err)
 			// Don't fail site creation, just note SSL didn't work
@@ -443,6 +448,122 @@ func inferSiteDomainFromArchive(filename string) (string, bool) {
 		return "", false
 	}
 	return domain, true
+}
+
+// IssueSSL issues an SSL certificate for a site.
+// POST /api/v1/sites/:id/ssl
+//
+// Request body (optional):
+//
+//	{"mode": "all"}      - issue cert for all hostnames (primary + www + aliases) [default]
+//	{"mode": "primary"}  - issue cert for primary domain + www only
+//	{"mode": "aliases"}  - issue cert for alias domains only
+//	{"mode": "none"}     - skip SSL, return success immediately
+func (h *APIHandler) IssueSSL(c *gin.Context) {
+	_, ok := requireTokenUserID(c)
+	if !ok {
+		return
+	}
+
+	siteID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid site ID"})
+		return
+	}
+
+	site, err := h.siteService.GetByID(siteID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, errorResponse{Error: "site not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to load site"})
+		return
+	}
+
+	if !h.canAccessSite(c, site) {
+		c.JSON(http.StatusForbidden, errorResponse{Error: "access denied"})
+		return
+	}
+
+	var req issueSSLRequest
+	_ = c.ShouldBindJSON(&req) // body is optional
+
+	mode := req.Mode
+	if mode == "" {
+		mode = "all"
+	}
+
+	// "none" — skip SSL
+	if mode == "none" {
+		c.JSON(http.StatusOK, siteResponse{
+			ID: site.ID, Name: site.Name, IsEnabled: site.IsEnabled, SSLEnabled: site.SSLEnabled,
+		})
+		return
+	}
+
+	// Load aliases for domain resolution
+	aliases, _ := h.domainRepo.ListBySite(siteID)
+
+	// Resolve mode to domain list
+	var domains []string
+	switch mode {
+	case "primary":
+		domains = []string{site.Name}
+		if site.WWWAlias {
+			domains = append(domains, "www."+site.Name)
+		}
+	case "aliases":
+		for _, a := range aliases {
+			domains = append(domains, a.Hostname)
+		}
+	case "all":
+		domains = []string{site.Name}
+		if site.WWWAlias {
+			domains = append(domains, "www."+site.Name)
+		}
+		for _, a := range aliases {
+			domains = append(domains, a.Hostname)
+		}
+	default:
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid mode: must be all, primary, aliases, or none"})
+		return
+	}
+
+	if len(domains) == 0 {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "no domains to issue certificate for"})
+		return
+	}
+
+	slog.Info("issuing SSL via API", "site_id", siteID, "mode", mode, "domains", domains)
+
+	if err := h.sslService.IssueCertificateForDomains(siteID, domains); err != nil {
+		slog.Error("SSL issuance failed via API", "site_id", siteID, "mode", mode, "domains", domains, "error", err)
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to issue SSL certificate"})
+		return
+	}
+
+	// Reload site to get updated SSL status
+	site, _ = h.siteService.GetByID(siteID)
+
+	token := middleware.GetAPIToken(c)
+	tokenName := ""
+	if token != nil {
+		tokenName = token.Name
+	}
+	h.auditService.LogAnonymous(services.ActionSSLIssue, services.EntitySite, map[string]string{
+		"site_name": site.Name,
+		"mode":      mode,
+		"domains":   strings.Join(domains, ","),
+		"api_token": tokenName,
+	}, c.ClientIP())
+
+	c.JSON(http.StatusOK, siteResponse{
+		ID:         site.ID,
+		Name:       site.Name,
+		IsEnabled:  site.IsEnabled,
+		SSLEnabled: site.SSLEnabled,
+	})
 }
 
 // CreateDomain adds an alias domain to a site.

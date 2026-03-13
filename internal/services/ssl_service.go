@@ -140,6 +140,71 @@ func (s *SSLService) IssueCertificate(siteID int64) error {
 	return nil
 }
 
+// IssueCertificateForDomains requests an SSL certificate for specific domains only.
+// Unlike IssueCertificate, this allows issuing certs for a subset of hostnames
+// (e.g. only aliases when the primary domain DNS is not pointed to this server).
+func (s *SSLService) IssueCertificateForDomains(siteID int64, domains []string) error {
+	site, err := s.siteRepo.GetByID(siteID)
+	if err != nil {
+		return fmt.Errorf("get site: %w", err)
+	}
+
+	if len(domains) == 0 {
+		return ErrNoDomains
+	}
+
+	var domainArgs []string
+	for _, d := range domains {
+		domainArgs = append(domainArgs, "-d", d)
+	}
+
+	s.certbotMu.Lock()
+	defer s.certbotMu.Unlock()
+
+	// Use first domain as cert-name to avoid conflicts with primary domain cert
+	certName := domains[0]
+
+	slog.Info("issuing SSL certificate for specific domains", "site_id", siteID, "cert_name", certName, "domains", domains)
+
+	args := []string{
+		"certonly",
+		"--webroot",
+		"-w", certbotWebroot,
+		"--email", s.config.SSL.Email,
+		"--agree-tos",
+		"--no-eff-email",
+		"--non-interactive",
+		"--cert-name", certName,
+	}
+
+	if s.config.SSL.Staging {
+		args = append(args, "--staging")
+	}
+
+	args = append(args, domainArgs...)
+
+	if _, err := runCertbot(args...); err != nil {
+		slog.Error("certbot failed", "site_id", siteID, "domains", domains, "error", err)
+		return err
+	}
+
+	// Update site SSL status
+	expiresAt, _ := s.GetCertificateExpiry(certName)
+	site.SSLEnabled = true
+	site.SSLExpiresAt = expiresAt
+	if err := s.siteRepo.Update(site); err != nil {
+		return fmt.Errorf("update site SSL status: %w", err)
+	}
+
+	// Regenerate nginx config with SSL block
+	if err := s.nginxService.ApplyConfig(siteID); err != nil {
+		return fmt.Errorf("apply nginx config: %w", err)
+	}
+
+	slog.Info("SSL certificate issued for specific domains", "site_id", siteID, "domains", domains)
+	return nil
+}
+
 // GetCertificateExpiry returns the expiration date of a certificate
 func (s *SSLService) GetCertificateExpiry(domain string) (*time.Time, error) {
 	certPath := filepath.Join("/etc/letsencrypt/live", domain, "fullchain.pem")

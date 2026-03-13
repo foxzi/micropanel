@@ -216,6 +216,8 @@ func runServe(cmd *cobra.Command, args []string) {
 			apiGroup.POST("/sites/:id/domains", apiHandler.CreateDomain)
 			apiGroup.GET("/sites/:id/domains", apiHandler.ListDomains)
 			apiGroup.DELETE("/sites/:id/domains/:domainId", apiHandler.DeleteDomain)
+
+			apiGroup.POST("/sites/:id/ssl", apiHandler.IssueSSL)
 		}
 	}
 
