@@ -123,10 +123,11 @@ func (s *SSLService) IssueCertificate(siteID int64) error {
 		return err
 	}
 
-	// Update site SSL status
+	// Update site SSL status and cert name
 	expiresAt, _ := s.GetCertificateExpiry(site.Name)
 	site.SSLEnabled = true
 	site.SSLExpiresAt = expiresAt
+	site.SSLCertName = site.Name
 	if err := s.siteRepo.Update(site); err != nil {
 		return fmt.Errorf("update site SSL status: %w", err)
 	}
@@ -188,10 +189,11 @@ func (s *SSLService) IssueCertificateForDomains(siteID int64, domains []string) 
 		return err
 	}
 
-	// Update site SSL status
+	// Update site SSL status and cert name
 	expiresAt, _ := s.GetCertificateExpiry(certName)
 	site.SSLEnabled = true
 	site.SSLExpiresAt = expiresAt
+	site.SSLCertName = certName
 	if err := s.siteRepo.Update(site); err != nil {
 		return fmt.Errorf("update site SSL status: %w", err)
 	}
@@ -274,7 +276,8 @@ func (s *SSLService) CheckAndUpdateSSLStatus(siteID int64) error {
 		return err
 	}
 
-	expiresAt, err := s.GetCertificateExpiry(site.Name)
+	certName := site.GetSSLCertName()
+	expiresAt, err := s.GetCertificateExpiry(certName)
 	if err != nil {
 		// Certificate not found or invalid - mark as not SSL
 		site.SSLEnabled = false

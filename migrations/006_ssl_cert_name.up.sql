@@ -1,0 +1,1 @@
+ALTER TABLE sites ADD COLUMN ssl_cert_name TEXT NOT NULL DEFAULT '';

@@ -64,8 +64,8 @@ server {
 
     server_name {{.ServerNames}};
 
-    ssl_certificate /etc/letsencrypt/live/{{.Site.Name}}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/{{.Site.Name}}/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/{{.SSLCertName}}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{.SSLCertName}}/privkey.pem;
     ssl_session_timeout 1d;
     ssl_session_cache shared:SSL:50m;
     ssl_session_tickets off;
@@ -169,6 +169,7 @@ type nginxTemplateData struct {
 	LogName     string
 	AuthPath    string
 	HasSSL      bool
+	SSLCertName string
 }
 
 func (s *NginxService) GenerateConfig(siteID int64) (string, error) {
@@ -223,6 +224,7 @@ func (s *NginxService) GenerateConfig(siteID int64) (string, error) {
 		LogName:     logName,
 		AuthPath:    filepath.Join(sitePath, "auth"),
 		HasSSL:      site.SSLEnabled,
+		SSLCertName: site.GetSSLCertName(),
 	}
 
 	tmpl, err := template.New("nginx").Parse(nginxSiteTemplate)
