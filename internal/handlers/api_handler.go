@@ -13,6 +13,7 @@ import (
 	"micropanel/internal/models"
 	"micropanel/internal/repository"
 	"micropanel/internal/services"
+	"micropanel/internal/validators"
 )
 
 type APIHandler struct {
@@ -21,15 +22,17 @@ type APIHandler struct {
 	nginxService  *services.NginxService
 	sslService    *services.SSLService
 	auditService  *services.AuditService
+	domainRepo    *repository.DomainRepository
 }
 
-func NewAPIHandler(siteService *services.SiteService, deployService *services.DeployService, nginxService *services.NginxService, sslService *services.SSLService, auditService *services.AuditService) *APIHandler {
+func NewAPIHandler(siteService *services.SiteService, deployService *services.DeployService, nginxService *services.NginxService, sslService *services.SSLService, auditService *services.AuditService, domainRepo *repository.DomainRepository) *APIHandler {
 	return &APIHandler{
 		siteService:   siteService,
 		deployService: deployService,
 		nginxService:  nginxService,
 		sslService:    sslService,
 		auditService:  auditService,
+		domainRepo:    domainRepo,
 	}
 }
 
@@ -52,6 +55,16 @@ type deployResponse struct {
 
 type errorResponse struct {
 	Error string `json:"error"`
+}
+
+type createDomainRequest struct {
+	Hostname string `json:"hostname" binding:"required"`
+}
+
+type domainResponse struct {
+	ID       int64  `json:"id"`
+	SiteID   int64  `json:"site_id"`
+	Hostname string `json:"hostname"`
 }
 
 // getTokenUserID returns the user ID associated with the API token.
@@ -430,4 +443,217 @@ func inferSiteDomainFromArchive(filename string) (string, bool) {
 		return "", false
 	}
 	return domain, true
+}
+
+// CreateDomain adds an alias domain to a site.
+// POST /api/v1/sites/:id/domains
+func (h *APIHandler) CreateDomain(c *gin.Context) {
+	_, ok := requireTokenUserID(c)
+	if !ok {
+		return
+	}
+
+	siteID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid site ID"})
+		return
+	}
+
+	site, err := h.siteService.GetByID(siteID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, errorResponse{Error: "site not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to load site"})
+		return
+	}
+
+	if !h.canAccessSite(c, site) {
+		c.JSON(http.StatusForbidden, errorResponse{Error: "access denied"})
+		return
+	}
+
+	var req createDomainRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "hostname is required"})
+		return
+	}
+
+	if err := validators.ValidateDomain(req.Hostname); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid hostname: " + err.Error()})
+		return
+	}
+
+	if req.Hostname == site.Name || req.Hostname == "www."+site.Name {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "cannot add primary domain or www alias as alias"})
+		return
+	}
+
+	// Idempotent: if alias already exists on this site, return it
+	if existing, err := h.domainRepo.GetByHostname(req.Hostname); err == nil {
+		if existing.SiteID == siteID {
+			c.JSON(http.StatusOK, domainResponse{
+				ID:       existing.ID,
+				SiteID:   existing.SiteID,
+				Hostname: existing.Hostname,
+			})
+			return
+		}
+		c.JSON(http.StatusConflict, errorResponse{Error: "domain already exists on another site"})
+		return
+	}
+
+	domain := &models.Domain{
+		SiteID:   siteID,
+		Hostname: req.Hostname,
+	}
+
+	if err := h.domainRepo.Create(domain); err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to create domain alias"})
+		return
+	}
+
+	if err := h.nginxService.ApplyConfig(siteID); err != nil {
+		slog.Error("failed to apply nginx config after adding domain alias", "site_id", siteID, "hostname", req.Hostname, "error", err)
+	}
+
+	token := middleware.GetAPIToken(c)
+	tokenName := ""
+	if token != nil {
+		tokenName = token.Name
+	}
+	h.auditService.LogAnonymous(services.ActionDomainAdd, services.EntityDomain, map[string]string{
+		"hostname":  req.Hostname,
+		"site_id":   strconv.FormatInt(siteID, 10),
+		"api_token": tokenName,
+	}, c.ClientIP())
+
+	c.JSON(http.StatusCreated, domainResponse{
+		ID:       domain.ID,
+		SiteID:   domain.SiteID,
+		Hostname: domain.Hostname,
+	})
+}
+
+// ListDomains returns alias domains for a site.
+// GET /api/v1/sites/:id/domains
+func (h *APIHandler) ListDomains(c *gin.Context) {
+	_, ok := requireTokenUserID(c)
+	if !ok {
+		return
+	}
+
+	siteID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid site ID"})
+		return
+	}
+
+	site, err := h.siteService.GetByID(siteID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, errorResponse{Error: "site not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to load site"})
+		return
+	}
+
+	if !h.canAccessSite(c, site) {
+		c.JSON(http.StatusForbidden, errorResponse{Error: "access denied"})
+		return
+	}
+
+	domains, err := h.domainRepo.ListBySite(siteID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to list domains"})
+		return
+	}
+
+	var response []domainResponse
+	for _, d := range domains {
+		response = append(response, domainResponse{
+			ID:       d.ID,
+			SiteID:   d.SiteID,
+			Hostname: d.Hostname,
+		})
+	}
+
+	if response == nil {
+		response = []domainResponse{}
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// DeleteDomain removes an alias domain from a site.
+// DELETE /api/v1/sites/:id/domains/:domainId
+func (h *APIHandler) DeleteDomain(c *gin.Context) {
+	_, ok := requireTokenUserID(c)
+	if !ok {
+		return
+	}
+
+	siteID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid site ID"})
+		return
+	}
+
+	domainID, err := strconv.ParseInt(c.Param("domainId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid domain ID"})
+		return
+	}
+
+	site, err := h.siteService.GetByID(siteID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, errorResponse{Error: "site not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to load site"})
+		return
+	}
+
+	if !h.canAccessSite(c, site) {
+		c.JSON(http.StatusForbidden, errorResponse{Error: "access denied"})
+		return
+	}
+
+	domain, err := h.domainRepo.GetByID(domainID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, errorResponse{Error: "domain not found"})
+		return
+	}
+
+	if domain.SiteID != siteID {
+		c.JSON(http.StatusForbidden, errorResponse{Error: "domain does not belong to this site"})
+		return
+	}
+
+	hostname := domain.Hostname
+
+	if err := h.domainRepo.Delete(domainID); err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to delete domain alias"})
+		return
+	}
+
+	if err := h.nginxService.ApplyConfig(siteID); err != nil {
+		slog.Error("failed to apply nginx config after deleting domain alias", "site_id", siteID, "hostname", hostname, "error", err)
+	}
+
+	token := middleware.GetAPIToken(c)
+	tokenName := ""
+	if token != nil {
+		tokenName = token.Name
+	}
+	h.auditService.LogAnonymous(services.ActionDomainDelete, services.EntityDomain, map[string]string{
+		"hostname":  hostname,
+		"site_id":   strconv.FormatInt(siteID, 10),
+		"api_token": tokenName,
+	}, c.ClientIP())
+
+	c.JSON(http.StatusOK, gin.H{"message": "domain alias deleted"})
 }

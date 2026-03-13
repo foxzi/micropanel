@@ -105,7 +105,7 @@ func runServe(cmd *cobra.Command, args []string) {
 	auditHandler := handlers.NewAuditHandler(auditService, userRepo)
 	userHandler := handlers.NewUserHandler(userRepo, auditService)
 	apiTokenHandler := handlers.NewAPITokenHandler(apiTokenService, auditService)
-	apiHandler := handlers.NewAPIHandler(siteService, deployService, nginxService, sslService, auditService)
+	apiHandler := handlers.NewAPIHandler(siteService, deployService, nginxService, sslService, auditService, domainRepo)
 
 	if !cfg.IsDevelopment() {
 		gin.SetMode(gin.ReleaseMode)
@@ -212,6 +212,10 @@ func runServe(cmd *cobra.Command, args []string) {
 			apiGroup.GET("/sites/:id", apiHandler.GetSite)
 			apiGroup.DELETE("/sites/:id", apiHandler.DeleteSite)
 			apiGroup.POST("/sites/:id/deploy", apiHandler.Deploy)
+
+			apiGroup.POST("/sites/:id/domains", apiHandler.CreateDomain)
+			apiGroup.GET("/sites/:id/domains", apiHandler.ListDomains)
+			apiGroup.DELETE("/sites/:id/domains/:domainId", apiHandler.DeleteDomain)
 		}
 	}
 
