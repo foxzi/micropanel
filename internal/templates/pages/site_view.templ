@@ -88,6 +88,19 @@ templ SiteView(user *models.User, site *models.Site, deploys []*models.Deploy, r
 						/>
 						<span class="text-gray-700 text-sm font-bold">Enabled</span>
 					</label>
+
+					<label class="flex items-center">
+						<input
+							type="checkbox"
+							name="fix_mime_types"
+							if site.FixMimeTypes {
+								checked
+							}
+							class="mr-2"
+						/>
+						<span class="text-gray-700 text-sm font-bold">Fix MIME types</span>
+						<span class="text-gray-500 text-xs ml-2">(for files with encoded query strings)</span>
+					</label>
 				</div>
 
 				<div class="flex justify-between">

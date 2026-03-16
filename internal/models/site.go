@@ -11,6 +11,7 @@ type Site struct {
 	SSLExpiresAt *time.Time `json:"ssl_expires_at,omitempty"`
 	SSLCertName  string     `json:"ssl_cert_name,omitempty"` // certbot --cert-name (may differ from Name)
 	WWWAlias     bool       `json:"www_alias"`               // Add www. alias
+	FixMimeTypes bool       `json:"fix_mime_types"`          // Fix MIME types for files with encoded query strings
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 

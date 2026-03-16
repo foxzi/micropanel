@@ -72,6 +72,13 @@ contents:
     file_info:
       mode: 0644
 
+  # Nginx MIME type fix for files with encoded query strings
+  - src: scripts/hack.conf
+    dst: /etc/nginx/hack.conf
+    type: config|noreplace
+    file_info:
+      mode: 0644
+
   # Systemd services
   - src: scripts/micropanel.service
     dst: /usr/lib/systemd/system/micropanel.service

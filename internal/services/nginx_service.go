@@ -102,6 +102,10 @@ server {
         try_files $uri $uri/ =404;
     }
 {{end}}{{end}}
+{{if .FixMimeTypes}}
+    # Fix MIME types for files with encoded query strings in filenames
+    include /etc/nginx/hack.conf;
+{{end}}
     location / {
         try_files $uri $uri/ =404;
     }
@@ -148,6 +152,10 @@ server {
         try_files $uri $uri/ =404;
     }
 {{end}}{{end}}
+{{if .FixMimeTypes}}
+    # Fix MIME types for files with encoded query strings in filenames
+    include /etc/nginx/hack.conf;
+{{end}}
     location / {
         try_files $uri $uri/ =404;
     }
@@ -161,15 +169,16 @@ server {
 `
 
 type nginxTemplateData struct {
-	Site        *models.Site
-	ServerNames string
-	Redirects   []*models.Redirect
-	AuthZones   []*models.AuthZone
-	PublicPath  string
-	LogName     string
-	AuthPath    string
-	HasSSL      bool
-	SSLCertName string
+	Site         *models.Site
+	ServerNames  string
+	Redirects    []*models.Redirect
+	AuthZones    []*models.AuthZone
+	PublicPath   string
+	LogName      string
+	AuthPath     string
+	HasSSL       bool
+	SSLCertName  string
+	FixMimeTypes bool
 }
 
 func (s *NginxService) GenerateConfig(siteID int64) (string, error) {
@@ -216,15 +225,16 @@ func (s *NginxService) GenerateConfig(siteID int64) (string, error) {
 	logName := strings.ReplaceAll(site.Name, ".", "_")
 
 	data := nginxTemplateData{
-		Site:        site,
-		ServerNames: serverNames,
-		Redirects:   redirects,
-		AuthZones:   authZones,
-		PublicPath:  filepath.Join(sitePath, "public"),
-		LogName:     logName,
-		AuthPath:    filepath.Join(sitePath, "auth"),
-		HasSSL:      site.SSLEnabled,
-		SSLCertName: site.GetSSLCertName(),
+		Site:         site,
+		ServerNames:  serverNames,
+		Redirects:    redirects,
+		AuthZones:    authZones,
+		PublicPath:   filepath.Join(sitePath, "public"),
+		LogName:      logName,
+		AuthPath:     filepath.Join(sitePath, "auth"),
+		HasSSL:       site.SSLEnabled,
+		SSLCertName:  site.GetSSLCertName(),
+		FixMimeTypes: site.FixMimeTypes,
 	}
 
 	tmpl, err := template.New("nginx").Parse(nginxSiteTemplate)

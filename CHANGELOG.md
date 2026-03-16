@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.7] - 2026-03-16
+
+### Added
+- Per-site `fix_mime_types` toggle to fix MIME type detection for files with encoded query strings in filenames (WordPress export artifacts)
+- New DB migration (007) adds `fix_mime_types` column to sites table
+- Nginx template conditionally includes `/etc/nginx/hack.conf` when fix_mime_types is enabled
+- API responses now include `fix_mime_types` field for site endpoints
+- Package now includes `/etc/nginx/hack.conf`
+
 ## [1.3.2] - 2026-03-05
 
 ### Changed

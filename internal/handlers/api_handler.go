@@ -42,10 +42,11 @@ type createSiteRequest struct {
 }
 
 type siteResponse struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	IsEnabled  bool   `json:"is_enabled"`
-	SSLEnabled bool   `json:"ssl_enabled"`
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	IsEnabled    bool   `json:"is_enabled"`
+	SSLEnabled   bool   `json:"ssl_enabled"`
+	FixMimeTypes bool   `json:"fix_mime_types"`
 }
 
 type deployResponse struct {
@@ -109,10 +110,11 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 	// If site with this name already exists, return it (idempotent create).
 	if existing, _ := h.siteService.GetByName(req.Name); existing != nil {
 		c.JSON(http.StatusOK, siteResponse{
-			ID:         existing.ID,
-			Name:       existing.Name,
-			IsEnabled:  existing.IsEnabled,
-			SSLEnabled: existing.SSLEnabled,
+			ID:           existing.ID,
+			Name:         existing.Name,
+			IsEnabled:    existing.IsEnabled,
+			SSLEnabled:   existing.SSLEnabled,
+			FixMimeTypes: existing.FixMimeTypes,
 		})
 		return
 	}
@@ -153,10 +155,11 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 	}, c.ClientIP())
 
 	c.JSON(http.StatusCreated, siteResponse{
-		ID:         site.ID,
-		Name:       site.Name,
-		IsEnabled:  site.IsEnabled,
-		SSLEnabled: site.SSLEnabled,
+		ID:           site.ID,
+		Name:         site.Name,
+		IsEnabled:    site.IsEnabled,
+		SSLEnabled:   site.SSLEnabled,
+		FixMimeTypes: site.FixMimeTypes,
 	})
 }
 
@@ -188,10 +191,11 @@ func (h *APIHandler) ListSites(c *gin.Context) {
 	var response []siteResponse
 	for _, site := range sites {
 		response = append(response, siteResponse{
-			ID:         site.ID,
-			Name:       site.Name,
-			IsEnabled:  site.IsEnabled,
-			SSLEnabled: site.SSLEnabled,
+			ID:           site.ID,
+			Name:         site.Name,
+			IsEnabled:    site.IsEnabled,
+			SSLEnabled:   site.SSLEnabled,
+			FixMimeTypes: site.FixMimeTypes,
 		})
 	}
 
@@ -242,10 +246,11 @@ func (h *APIHandler) GetSite(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, siteResponse{
-		ID:         site.ID,
-		Name:       site.Name,
-		IsEnabled:  site.IsEnabled,
-		SSLEnabled: site.SSLEnabled,
+		ID:           site.ID,
+		Name:         site.Name,
+		IsEnabled:    site.IsEnabled,
+		SSLEnabled:   site.SSLEnabled,
+		FixMimeTypes: site.FixMimeTypes,
 	})
 }
 
@@ -497,7 +502,7 @@ func (h *APIHandler) IssueSSL(c *gin.Context) {
 	// "none" — skip SSL
 	if mode == "none" {
 		c.JSON(http.StatusOK, siteResponse{
-			ID: site.ID, Name: site.Name, IsEnabled: site.IsEnabled, SSLEnabled: site.SSLEnabled,
+			ID: site.ID, Name: site.Name, IsEnabled: site.IsEnabled, SSLEnabled: site.SSLEnabled, FixMimeTypes: site.FixMimeTypes,
 		})
 		return
 	}
@@ -559,10 +564,11 @@ func (h *APIHandler) IssueSSL(c *gin.Context) {
 	}, c.ClientIP())
 
 	c.JSON(http.StatusOK, siteResponse{
-		ID:         site.ID,
-		Name:       site.Name,
-		IsEnabled:  site.IsEnabled,
-		SSLEnabled: site.SSLEnabled,
+		ID:           site.ID,
+		Name:         site.Name,
+		IsEnabled:    site.IsEnabled,
+		SSLEnabled:   site.SSLEnabled,
+		FixMimeTypes: site.FixMimeTypes,
 	})
 }
 

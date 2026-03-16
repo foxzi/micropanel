@@ -176,10 +176,12 @@ func (h *SiteHandler) Update(c *gin.Context) {
 	oldName := site.Name
 	oldEnabled := site.IsEnabled
 	oldWWWAlias := site.WWWAlias
+	oldFixMimeTypes := site.FixMimeTypes
 
 	site.Name = c.PostForm("name")
 	site.IsEnabled = c.PostForm("is_enabled") == "on"
 	site.WWWAlias = c.PostForm("www_alias") == "on"
+	site.FixMimeTypes = c.PostForm("fix_mime_types") == "on"
 
 	if err := h.siteService.Update(site); err != nil {
 		c.String(http.StatusInternalServerError, "Error updating site")
@@ -187,16 +189,17 @@ func (h *SiteHandler) Update(c *gin.Context) {
 	}
 
 	// Regenerate nginx config if relevant fields changed
-	if oldName != site.Name || oldEnabled != site.IsEnabled || oldWWWAlias != site.WWWAlias {
+	if oldName != site.Name || oldEnabled != site.IsEnabled || oldWWWAlias != site.WWWAlias || oldFixMimeTypes != site.FixMimeTypes {
 		h.nginxService.ApplyConfig(site.ID)
 	}
 
 	// Log site update
-	if oldName != site.Name || oldEnabled != site.IsEnabled || oldWWWAlias != site.WWWAlias {
+	if oldName != site.Name || oldEnabled != site.IsEnabled || oldWWWAlias != site.WWWAlias || oldFixMimeTypes != site.FixMimeTypes {
 		h.auditService.LogUser(user.ID, services.ActionSiteUpdate, services.EntitySite, &site.ID, map[string]interface{}{
-			"name":       site.Name,
-			"is_enabled": site.IsEnabled,
-			"www_alias":  site.WWWAlias,
+			"name":           site.Name,
+			"is_enabled":     site.IsEnabled,
+			"www_alias":      site.WWWAlias,
+			"fix_mime_types": site.FixMimeTypes,
 		}, ip)
 	}
 
