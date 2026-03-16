@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.8] - 2026-03-16
+
+### Fixed
+- hack.conf: files with %3F in URL but without ? in filename now served correctly via @strip_query fallback
+- Added image file types (jpg, png, gif, webp, ico) to hack.conf MIME fix rules
+
 ## [1.3.7] - 2026-03-16
 
 ### Added
