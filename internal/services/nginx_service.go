@@ -296,10 +296,12 @@ func (s *NginxService) Reload() error {
 		return err
 	}
 
-	cmd := exec.Command("sudo", "nginx", "-s", "reload")
+	// Use systemctl restart instead of nginx -s reload because reload
+	// does not always pick up changes in included files (e.g. hack.conf)
+	cmd := exec.Command("sudo", "systemctl", "restart", "nginx")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("nginx reload failed: %s", string(output))
+		return fmt.Errorf("nginx restart failed: %s", string(output))
 	}
 	return nil
 }
