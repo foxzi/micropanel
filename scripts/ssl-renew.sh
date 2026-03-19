@@ -30,7 +30,7 @@ fi
 # certbot renew --quiet
 # if [ $? -eq 0 ]; then
 #     echo "Certbot renewal successful"
-#     nginx -t && nginx -s reload
+#     nginx -t && sudo systemctl restart nginx
 # else
 #     echo "Certbot renewal failed"
 #     exit 1

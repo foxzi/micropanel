@@ -37,8 +37,9 @@ func NewAPIHandler(siteService *services.SiteService, deployService *services.De
 }
 
 type createSiteRequest struct {
-	Name string `json:"name" binding:"required"`
-	SSL  *bool  `json:"ssl"` // optional, default false; if true, issues cert for all hostnames after creation
+	Name         string `json:"name" binding:"required"`
+	SSL          *bool  `json:"ssl"`            // optional, default false; if true, issues cert for all hostnames after creation
+	FixMimeTypes bool   `json:"fix_mime_types"` // optional, default false
 }
 
 type siteResponse struct {
@@ -123,6 +124,14 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to create site"})
 		return
+	}
+
+	// Apply fix_mime_types if requested
+	if req.FixMimeTypes {
+		site.FixMimeTypes = true
+		if err := h.siteService.Update(site); err != nil {
+			slog.Error("failed to set fix_mime_types", "site_id", site.ID, "error", err)
+		}
 	}
 
 	// Generate and apply nginx config (write + test + reload)

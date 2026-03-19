@@ -94,7 +94,7 @@ func Load() (*Config, error) {
 		},
 		Nginx: NginxConfig{
 			ConfigPath: "/etc/nginx/sites-enabled",
-			ReloadCmd:  "nginx -s reload",
+			ReloadCmd:  "sudo systemctl restart nginx",
 		},
 		SSL: SSLConfig{
 			Email:   "",

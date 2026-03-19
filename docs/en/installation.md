@@ -68,7 +68,7 @@ sites:
 
 nginx:
   config_path: /etc/nginx/sites-enabled
-  reload_cmd: sudo nginx -s reload
+  reload_cmd: sudo systemctl restart nginx
 
 ssl:
   email: admin@example.com

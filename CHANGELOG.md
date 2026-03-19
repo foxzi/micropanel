@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.10] - 2026-03-19
+
+### Fixed
+- Replace all remaining `nginx -s reload` references with `systemctl restart nginx` in default config, config files, docs, and scripts
+- API CreateSite now applies `fix_mime_types` field from request body
+
 ## [1.3.9] - 2026-03-16
 
 ### Fixed
