@@ -17,6 +17,7 @@ cat > /etc/sudoers.d/micropanel <<EOF
 # Allow micropanel to run certbot and nginx without password
 micropanel ALL=(ALL) NOPASSWD: /usr/bin/certbot
 micropanel ALL=(ALL) NOPASSWD: /usr/sbin/nginx
+micropanel ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx
 micropanel ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/nginx/sites-enabled/*
 micropanel ALL=(ALL) NOPASSWD: /usr/bin/rm -f /etc/nginx/sites-enabled/*
 micropanel ALL=(ALL) NOPASSWD: /usr/bin/cat /etc/letsencrypt/live/*/fullchain.pem
@@ -29,9 +30,9 @@ if grep -q "change-me-min-32-chars" /etc/micropanel/config.yaml 2>/dev/null; the
     sed -i "s/change-me-min-32-chars-random-string/$SECRET/" /etc/micropanel/config.yaml
 fi
 
-# Reload nginx if running (picks up /etc/nginx/conf.d/micropanel.conf)
+# Restart nginx if running (picks up /etc/nginx/conf.d/micropanel.conf)
 if nginx -t 2>/dev/null; then
-    systemctl reload nginx 2>/dev/null || true
+    systemctl restart nginx 2>/dev/null || true
 fi
 
 # Reload systemd

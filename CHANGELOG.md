@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.11] - 2026-03-23
+
+### Fixed
+- Add `systemctl restart nginx` to sudoers in postinstall script (was missing, causing silent reload failures)
+- Replace `systemctl reload nginx` with `systemctl restart nginx` in postinstall script
+
 ## [1.3.10] - 2026-03-19
 
 ### Fixed
