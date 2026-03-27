@@ -23,9 +23,10 @@ type APIHandler struct {
 	sslService    *services.SSLService
 	auditService  *services.AuditService
 	domainRepo    *repository.DomainRepository
+	userRepo      *repository.UserRepository
 }
 
-func NewAPIHandler(siteService *services.SiteService, deployService *services.DeployService, nginxService *services.NginxService, sslService *services.SSLService, auditService *services.AuditService, domainRepo *repository.DomainRepository) *APIHandler {
+func NewAPIHandler(siteService *services.SiteService, deployService *services.DeployService, nginxService *services.NginxService, sslService *services.SSLService, auditService *services.AuditService, domainRepo *repository.DomainRepository, userRepo *repository.UserRepository) *APIHandler {
 	return &APIHandler{
 		siteService:   siteService,
 		deployService: deployService,
@@ -33,6 +34,7 @@ func NewAPIHandler(siteService *services.SiteService, deployService *services.De
 		sslService:    sslService,
 		auditService:  auditService,
 		domainRepo:    domainRepo,
+		userRepo:      userRepo,
 	}
 }
 
@@ -222,8 +224,8 @@ func (h *APIHandler) canAccessSite(c *gin.Context, site *models.Site) bool {
 	if userID == 0 {
 		return false
 	}
-	// Admin (user_id=1) can access all sites
-	if userID == 1 {
+	// Check if user is admin by role
+	if user, err := h.userRepo.GetByID(userID); err == nil && user.IsAdmin() {
 		return true
 	}
 	return site.OwnerID == userID
