@@ -12,6 +12,20 @@ mkdir -p /var/www/certbot
 chown root:root /var/www/certbot
 chmod 755 /var/www/certbot
 
+# Generate self-signed certificate for nginx default_server (unknown domains)
+SSL_DIR="/etc/micropanel/ssl"
+SSL_CRT="$SSL_DIR/default.crt"
+SSL_KEY="$SSL_DIR/default.key"
+if [ ! -f "$SSL_CRT" ] || [ ! -f "$SSL_KEY" ]; then
+    mkdir -p "$SSL_DIR"
+    chmod 750 "$SSL_DIR"
+    openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
+        -keyout "$SSL_KEY" -out "$SSL_CRT" \
+        -subj "/CN=micropanel-default" >/dev/null 2>&1
+    chmod 600 "$SSL_KEY"
+    chmod 644 "$SSL_CRT"
+fi
+
 # Create sudoers file for micropanel user
 cat > /etc/sudoers.d/micropanel <<EOF
 # Allow micropanel to run certbot and nginx without password
@@ -31,12 +45,37 @@ if grep -q "change-me-min-32-chars" /etc/micropanel/config.yaml 2>/dev/null; the
 fi
 
 # Restart nginx if running (picks up /etc/nginx/conf.d/micropanel.conf)
-if nginx -t 2>/dev/null; then
-    systemctl restart nginx 2>/dev/null || true
+# Deferred until after systemd limits / nginx.conf tuning below.
+
+# Raise nginx file descriptor limit (each hosted site opens access+error logs)
+mkdir -p /etc/systemd/system/nginx.service.d
+if [ ! -f /etc/systemd/system/nginx.service.d/micropanel-limits.conf ]; then
+    cat > /etc/systemd/system/nginx.service.d/micropanel-limits.conf <<'EOF'
+# Installed by micropanel - raises NOFILE so nginx can serve many vhosts
+[Service]
+LimitNOFILE=65536
+EOF
 fi
 
-# Reload systemd
+# Bump nginx worker limits if still at packaged defaults
+if [ -f /etc/nginx/nginx.conf ]; then
+    if ! grep -q "worker_rlimit_nofile" /etc/nginx/nginx.conf; then
+        sed -i '/^worker_processes/a worker_rlimit_nofile 65536;' /etc/nginx/nginx.conf
+    fi
+    sed -i 's/^\(\s*\)worker_connections 768;/\1worker_connections 4096;/' /etc/nginx/nginx.conf
+fi
+
+# Reload systemd (picks up nginx.service.d drop-in)
 systemctl daemon-reload
+
+# Test nginx config and restart to apply new limits + micropanel.conf
+if command -v nginx >/dev/null 2>&1; then
+    if nginx -t >/dev/null 2>&1; then
+        systemctl restart nginx >/dev/null 2>&1 || true
+    else
+        echo "WARNING: nginx -t failed; skipping nginx restart. Run 'nginx -t' to debug."
+    fi
+fi
 
 echo ""
 echo "MicroPanel installed successfully!"

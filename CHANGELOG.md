@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.13] - 2026-04-23
+
+### Added
+- Default nginx server block catching requests for unknown domains and returning a styled 404 page
+- Self-signed certificate auto-generated in postinstall for HTTPS default_server (`/etc/micropanel/ssl/default.{crt,key}`)
+- Static fallback page shipped at `/usr/share/micropanel/default-site/index.html`
+- ACME HTTP-01 challenge passthrough in default server for future domains
+
+### Changed
+- Raise nginx file descriptor limit to 65536 via systemd drop-in (prevents "Too many open files" when hosting many sites)
+- Bump nginx `worker_connections` to 4096 and `worker_rlimit_nofile` to 65536
+- Increase `server_names_hash_max_size` to 4096 to support hundreds of vhosts
+- Postinstall now runs `nginx -t` before `systemctl restart nginx` and defers restart until after all tuning is applied
+
 ## [1.3.12] - 2026-03-27
 
 ### Fixed
