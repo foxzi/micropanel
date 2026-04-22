@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Default nginx site: use inline `listen 443 ssl http2` instead of standalone `http2 on;` directive for compatibility with nginx < 1.25 (e.g. Ubuntu 22.04/24.04 ship 1.18/1.24)
+
 ## [1.3.13] - 2026-04-23
 
 ### Added
