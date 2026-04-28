@@ -70,10 +70,19 @@ systemctl daemon-reload
 
 # Test nginx config and restart to apply new limits + micropanel.conf
 if command -v nginx >/dev/null 2>&1; then
-    if nginx -t >/dev/null 2>&1; then
+    if nginx -t >/tmp/micropanel-nginx-test.log 2>&1; then
         systemctl restart nginx >/dev/null 2>&1 || true
+        rm -f /tmp/micropanel-nginx-test.log
     else
-        echo "WARNING: nginx -t failed; skipping nginx restart. Run 'nginx -t' to debug."
+        echo "" >&2
+        echo "ERROR: nginx -t failed after micropanel postinstall." >&2
+        echo "       The package is installed but nginx is NOT restarted." >&2
+        echo "       Output:" >&2
+        sed 's/^/         /' /tmp/micropanel-nginx-test.log >&2
+        echo "" >&2
+        echo "       Fix the config and run: nginx -t && systemctl restart nginx" >&2
+        echo "" >&2
+        exit 1
     fi
 fi
 
