@@ -369,19 +369,24 @@ func (h *APIHandler) Deploy(c *gin.Context) {
 		status := http.StatusInternalServerError
 		errMsg := "deploy failed"
 
-		switch err {
-		case services.ErrArchiveTooLarge:
+		switch {
+		case errors.Is(err, services.ErrArchiveTooLarge):
 			status = http.StatusRequestEntityTooLarge
 			errMsg = "archive too large"
-		case services.ErrTooManyFiles:
+		case errors.Is(err, services.ErrTooManyFiles):
 			status = http.StatusBadRequest
 			errMsg = "too many files in archive"
-		case services.ErrUnsupportedArchive:
+		case errors.Is(err, services.ErrUnsupportedArchive):
 			status = http.StatusBadRequest
 			errMsg = "unsupported archive format (use .zip or .tar.gz)"
-		case services.ErrPathTraversal, services.ErrSymlinkDetected:
+		case errors.Is(err, services.ErrPathTraversal):
 			status = http.StatusBadRequest
-			errMsg = "invalid archive content"
+			errMsg = "invalid archive content: path traversal detected"
+		case errors.Is(err, services.ErrSymlinkDetected):
+			status = http.StatusBadRequest
+			errMsg = "invalid archive content: symlinks are not allowed"
+		default:
+			slog.Error("api deploy failed", "site_id", site.ID, "user_id", userID, "err", err)
 		}
 
 		c.JSON(status, errorResponse{Error: errMsg})

@@ -1,0 +1,5 @@
+[      22ms] [WARNING] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation @ https://cdn.tailwindcss.com/:63
+[   46870ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:8080/login:0
+[   46871ms] [ERROR] Response Status Error Code 401 from /login @ https://unpkg.com/htmx.org@1.9.10:0
+[   55956ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:8080/login:0
+[   55957ms] [ERROR] Response Status Error Code 401 from /login @ https://unpkg.com/htmx.org@1.9.10:0

@@ -47,3 +47,6 @@ tz.md
 # OS
 .DS_Store
 Thumbs.db
+
+# Nemo
+.nemo/

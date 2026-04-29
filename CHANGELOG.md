@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Postinstall now fails (exit 1) when `nginx -t` fails instead of silently warning, so broken configs are surfaced immediately during apt install/upgrade
+- API `POST /api/v1/sites/{id}/deploy` now returns specific error messages (`symlinks are not allowed`, `path traversal detected`, `archive too large`, etc.) instead of generic `deploy failed`, and logs the underlying error for unknown failures
 
 ## [1.3.13] - 2026-04-23
 
