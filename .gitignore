@@ -50,3 +50,9 @@ Thumbs.db
 
 # Nemo
 .nemo/
+
+# Local artifacts
+.playwright-mcp/
+/config.yaml
+*.zip
+*.png
