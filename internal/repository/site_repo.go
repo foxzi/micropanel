@@ -20,9 +20,9 @@ func NewSiteRepository(db *database.DB) *SiteRepository {
 func (r *SiteRepository) GetByID(id int64) (*models.Site, error) {
 	site := &models.Site{}
 	err := r.db.QueryRow(`
-		SELECT id, name, owner_id, is_enabled, ssl_enabled, ssl_expires_at, ssl_cert_name, www_alias, fix_mime_types, created_at, updated_at
+		SELECT id, name, owner_id, is_enabled, ssl_enabled, ssl_expires_at, ssl_cert_name, www_alias, fix_mime_types, ssl_status, ssl_error, created_at, updated_at
 		FROM sites WHERE id = ?
-	`, id).Scan(&site.ID, &site.Name, &site.OwnerID, &site.IsEnabled, &site.SSLEnabled, &site.SSLExpiresAt, &site.SSLCertName, &site.WWWAlias, &site.FixMimeTypes, &site.CreatedAt, &site.UpdatedAt)
+	`, id).Scan(&site.ID, &site.Name, &site.OwnerID, &site.IsEnabled, &site.SSLEnabled, &site.SSLExpiresAt, &site.SSLCertName, &site.WWWAlias, &site.FixMimeTypes, &site.SSLStatus, &site.SSLError, &site.CreatedAt, &site.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -32,9 +32,9 @@ func (r *SiteRepository) GetByID(id int64) (*models.Site, error) {
 func (r *SiteRepository) GetByName(name string) (*models.Site, error) {
 	site := &models.Site{}
 	err := r.db.QueryRow(`
-		SELECT id, name, owner_id, is_enabled, ssl_enabled, ssl_expires_at, ssl_cert_name, www_alias, fix_mime_types, created_at, updated_at
+		SELECT id, name, owner_id, is_enabled, ssl_enabled, ssl_expires_at, ssl_cert_name, www_alias, fix_mime_types, ssl_status, ssl_error, created_at, updated_at
 		FROM sites WHERE name = ?
-	`, name).Scan(&site.ID, &site.Name, &site.OwnerID, &site.IsEnabled, &site.SSLEnabled, &site.SSLExpiresAt, &site.SSLCertName, &site.WWWAlias, &site.FixMimeTypes, &site.CreatedAt, &site.UpdatedAt)
+	`, name).Scan(&site.ID, &site.Name, &site.OwnerID, &site.IsEnabled, &site.SSLEnabled, &site.SSLExpiresAt, &site.SSLCertName, &site.WWWAlias, &site.FixMimeTypes, &site.SSLStatus, &site.SSLError, &site.CreatedAt, &site.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -55,6 +55,7 @@ func (r *SiteRepository) Create(site *models.Site) error {
 		return err
 	}
 	site.ID = id
+	site.SSLStatus = models.SSLStatusNone
 	site.CreatedAt = now
 	site.UpdatedAt = now
 	return nil
@@ -69,6 +70,39 @@ func (r *SiteRepository) Update(site *models.Site) error {
 	return err
 }
 
+// Update does not write ssl_status and ssl_error: a background issuance owns
+// them, and a full-row save of a site loaded earlier would undo its outcome.
+// They change only through the SSL status methods below.
+
+// BeginSSLIssuance marks the site's certificate as being issued. It reports
+// false if an issuance is already running.
+func (r *SiteRepository) BeginSSLIssuance(id int64) (bool, error) {
+	result, err := r.db.Exec(`UPDATE sites SET ssl_status = ?, ssl_error = '' WHERE id = ? AND ssl_status != ?`,
+		models.SSLStatusIssuing, id, models.SSLStatusIssuing)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	return n == 1, err
+}
+
+// SetSSLStatus records the outcome of a certificate issuance.
+func (r *SiteRepository) SetSSLStatus(id int64, status models.SSLStatus, sslError string) error {
+	_, err := r.db.Exec(`UPDATE sites SET ssl_status = ?, ssl_error = ? WHERE id = ?`, status, sslError, id)
+	return err
+}
+
+// FailInterruptedSSLIssuance marks every running issuance as failed with the
+// given reason and returns how many there were. Called at startup.
+func (r *SiteRepository) FailInterruptedSSLIssuance(reason string) (int64, error) {
+	result, err := r.db.Exec(`UPDATE sites SET ssl_status = ?, ssl_error = ? WHERE ssl_status = ?`,
+		models.SSLStatusFailed, reason, models.SSLStatusIssuing)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 func (r *SiteRepository) Delete(id int64) error {
 	_, err := r.db.Exec(`DELETE FROM sites WHERE id = ?`, id)
 	return err
@@ -76,7 +110,7 @@ func (r *SiteRepository) Delete(id int64) error {
 
 func (r *SiteRepository) ListByOwner(ownerID int64) ([]*models.Site, error) {
 	rows, err := r.db.Query(`
-		SELECT id, name, owner_id, is_enabled, ssl_enabled, ssl_expires_at, ssl_cert_name, www_alias, fix_mime_types, created_at, updated_at
+		SELECT id, name, owner_id, is_enabled, ssl_enabled, ssl_expires_at, ssl_cert_name, www_alias, fix_mime_types, ssl_status, ssl_error, created_at, updated_at
 		FROM sites WHERE owner_id = ? ORDER BY created_at DESC
 	`, ownerID)
 	if err != nil {
@@ -89,7 +123,7 @@ func (r *SiteRepository) ListByOwner(ownerID int64) ([]*models.Site, error) {
 
 func (r *SiteRepository) ListAll() ([]*models.Site, error) {
 	rows, err := r.db.Query(`
-		SELECT id, name, owner_id, is_enabled, ssl_enabled, ssl_expires_at, ssl_cert_name, www_alias, fix_mime_types, created_at, updated_at
+		SELECT id, name, owner_id, is_enabled, ssl_enabled, ssl_expires_at, ssl_cert_name, www_alias, fix_mime_types, ssl_status, ssl_error, created_at, updated_at
 		FROM sites ORDER BY created_at DESC
 	`)
 	if err != nil {
@@ -104,7 +138,7 @@ func (r *SiteRepository) scanSites(rows *sql.Rows) ([]*models.Site, error) {
 	var sites []*models.Site
 	for rows.Next() {
 		site := &models.Site{}
-		if err := rows.Scan(&site.ID, &site.Name, &site.OwnerID, &site.IsEnabled, &site.SSLEnabled, &site.SSLExpiresAt, &site.SSLCertName, &site.WWWAlias, &site.FixMimeTypes, &site.CreatedAt, &site.UpdatedAt); err != nil {
+		if err := rows.Scan(&site.ID, &site.Name, &site.OwnerID, &site.IsEnabled, &site.SSLEnabled, &site.SSLExpiresAt, &site.SSLCertName, &site.WWWAlias, &site.FixMimeTypes, &site.SSLStatus, &site.SSLError, &site.CreatedAt, &site.UpdatedAt); err != nil {
 			return nil, err
 		}
 		sites = append(sites, site)
@@ -115,7 +149,7 @@ func (r *SiteRepository) scanSites(rows *sql.Rows) ([]*models.Site, error) {
 func (r *SiteRepository) ListByOwnerPaginated(ownerID int64, search string, page, limit int) ([]*models.Site, error) {
 	offset := (page - 1) * limit
 	query := `
-		SELECT id, name, owner_id, is_enabled, ssl_enabled, ssl_expires_at, ssl_cert_name, www_alias, fix_mime_types, created_at, updated_at
+		SELECT id, name, owner_id, is_enabled, ssl_enabled, ssl_expires_at, ssl_cert_name, www_alias, fix_mime_types, ssl_status, ssl_error, created_at, updated_at
 		FROM sites WHERE owner_id = ?`
 	args := []interface{}{ownerID}
 
@@ -139,7 +173,7 @@ func (r *SiteRepository) ListByOwnerPaginated(ownerID int64, search string, page
 func (r *SiteRepository) ListAllPaginated(search string, page, limit int) ([]*models.Site, error) {
 	offset := (page - 1) * limit
 	query := `
-		SELECT id, name, owner_id, is_enabled, ssl_enabled, ssl_expires_at, ssl_cert_name, www_alias, fix_mime_types, created_at, updated_at
+		SELECT id, name, owner_id, is_enabled, ssl_enabled, ssl_expires_at, ssl_cert_name, www_alias, fix_mime_types, ssl_status, ssl_error, created_at, updated_at
 		FROM sites`
 	var args []interface{}
 

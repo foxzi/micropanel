@@ -94,6 +94,11 @@ func runServe(cmd *cobra.Command, args []string) {
 		log.Printf("Marked %d deploys interrupted by a restart as failed", n)
 	}
 	sslService := services.NewSSLService(cfg, siteRepo, domainRepo, nginxService)
+	if n, err := sslService.RecoverInterrupted(); err != nil {
+		log.Fatalf("Failed to recover interrupted certificate issuance: %v", err)
+	} else if n > 0 {
+		log.Printf("Marked %d certificate issuances interrupted by a restart as failed", n)
+	}
 	redirectService := services.NewRedirectService(redirectRepo, nginxService)
 	authZoneService := services.NewAuthZoneService(cfg, authZoneRepo, nginxService)
 	fileService := services.NewFileService(cfg)

@@ -5,12 +5,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -34,7 +36,14 @@ type apiFixture struct {
 	deployRepo *repository.DeployRepository
 	siteID     int64
 	ownerID    int64
+	// certbot stands in for the certbot command; the default succeeds.
+	certbot func(args ...string) ([]byte, error)
 }
+
+type nopNginx struct{}
+
+func (nopNginx) ApplyConfig(int64) error { return nil }
+func (nopNginx) Reload() error           { return nil }
 
 func newAPIFixture(t *testing.T) *apiFixture {
 	t.Helper()
@@ -70,10 +79,18 @@ func newAPIFixture(t *testing.T) *apiFixture {
 	domainRepo := repository.NewDomainRepository(db)
 	deployRepo := repository.NewDeployRepository(db)
 	userRepo := repository.NewUserRepository(db)
+	f := &apiFixture{deployRepo: deployRepo, siteID: siteID, ownerID: ownerID}
+	f.certbot = func(...string) ([]byte, error) { return []byte("ok"), nil }
+	sslService := services.NewSSLService(cfg, siteRepo, domainRepo, nil)
+	sslService.SetCommands(
+		func(args ...string) ([]byte, error) { return f.certbot(args...) },
+		func(string) ([]byte, error) { return nil, errors.New("no certificate in tests") },
+		nopNginx{},
+	)
 	h := NewAPIHandler(
 		services.NewSiteService(siteRepo, domainRepo, cfg),
 		services.NewDeployService(cfg, deployRepo, siteRepo),
-		nil, nil,
+		nil, sslService,
 		services.NewAuditService(repository.NewAuditRepository(db)),
 		domainRepo, userRepo,
 	)
@@ -84,9 +101,22 @@ func newAPIFixture(t *testing.T) *apiFixture {
 		{Name: "owner", Token: ownerToken, UserID: ownerID},
 		{Name: "stranger", Token: strangerToken, UserID: strangerID},
 	}, nil))
+	api.GET("/sites/:id", h.GetSite)
 	api.POST("/sites/:id/deploy", h.Deploy)
 	api.GET("/sites/:id/deploys", h.ListDeploys)
-	return &apiFixture{router: r, deployRepo: deployRepo, siteID: siteID, ownerID: ownerID}
+	api.POST("/sites/:id/ssl", h.IssueSSL)
+	f.router = r
+	return f
+}
+
+func (f *apiFixture) do(t *testing.T, method, path, token, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, path, bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	f.router.ServeHTTP(w, req)
+	return w
 }
 
 func archiveWithIndex(t *testing.T, index string) []byte {
@@ -235,5 +265,76 @@ func TestAPIListDeploys(t *testing.T) {
 	}
 	if w := f.list(t, strangerToken, ""); w.Code != http.StatusForbidden {
 		t.Errorf("stranger: code = %d, want 403", w.Code)
+	}
+}
+
+func TestAPIAsyncCertificateAnswers202AndReportsTheStatus(t *testing.T) {
+	f := newAPIFixture(t)
+	release := make(chan struct{})
+	f.certbot = func(...string) ([]byte, error) { <-release; return []byte("ok"), nil }
+	sitePath := fmt.Sprintf("/api/v1/sites/%d", f.siteID)
+
+	w := f.do(t, http.MethodPost, sitePath+"/ssl", ownerToken, `{"mode":"primary","async":true}`)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("code = %d %s, want 202", w.Code, w.Body)
+	}
+	if got := decode[siteResponse](t, w); got.SSLStatus != "issuing" {
+		t.Fatalf("202 body = %+v, want ssl_status issuing", got)
+	}
+	if again := f.do(t, http.MethodPost, sitePath+"/ssl", ownerToken, `{"mode":"primary","async":true}`); again.Code != http.StatusAccepted {
+		t.Fatalf("repeat = %d, want 202", again.Code)
+	}
+
+	close(release)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got := decode[siteResponse](t, f.do(t, http.MethodGet, sitePath, ownerToken, ""))
+		if got.SSLStatus == "issued" {
+			break
+		}
+		if got.SSLStatus != "issuing" || time.Now().After(deadline) {
+			t.Fatalf("site = %+v, want issued", got)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestAPIAsyncCertificateFailureIsVisible(t *testing.T) {
+	f := newAPIFixture(t)
+	f.certbot = func(...string) ([]byte, error) { return nil, errors.New("certbot command failed: Challenge failed") }
+	sitePath := fmt.Sprintf("/api/v1/sites/%d", f.siteID)
+
+	if w := f.do(t, http.MethodPost, sitePath+"/ssl", ownerToken, `{"async":true}`); w.Code != http.StatusAccepted {
+		t.Fatalf("code = %d, want 202", w.Code)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got := decode[siteResponse](t, f.do(t, http.MethodGet, sitePath, ownerToken, ""))
+		if got.SSLStatus == "failed" {
+			if got.SSLError != "certbot command failed: Challenge failed" {
+				t.Errorf("ssl_error = %q", got.SSLError)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("site = %+v, want failed", got)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestAPISyncCertificateIsUnchanged(t *testing.T) {
+	f := newAPIFixture(t)
+	w := f.do(t, http.MethodPost, fmt.Sprintf("/api/v1/sites/%d/ssl", f.siteID), ownerToken, `{"mode":"primary"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code = %d %s, want 200", w.Code, w.Body)
+	}
+	if got := decode[siteResponse](t, w); got.SSLStatus != "issued" || !got.SSLEnabled {
+		t.Fatalf("body = %+v, want issued", got)
+	}
+
+	f.certbot = func(...string) ([]byte, error) { return nil, errors.New("certbot command failed") }
+	if w := f.do(t, http.MethodPost, fmt.Sprintf("/api/v1/sites/%d/ssl", f.siteID), ownerToken, `{}`); w.Code != http.StatusInternalServerError {
+		t.Fatalf("failing certbot: code = %d, want 500", w.Code)
 	}
 }

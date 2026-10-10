@@ -46,12 +46,30 @@ var (
 	ErrDomainNotFound = errors.New("domain not found")
 )
 
+// interruptedSSLReason is the error of an issuance that was still running
+// when the panel started.
+const interruptedSSLReason = "certificate issuance interrupted by a panel restart"
+
+// maxSSLErrorLength bounds the stored reason of a failed issuance; certbot
+// prints the useful part last.
+const maxSSLErrorLength = 1000
+
+// NginxConfigurator is the part of NginxService the SSL service needs.
+type NginxConfigurator interface {
+	ApplyConfig(siteID int64) error
+	Reload() error
+}
+
 type SSLService struct {
 	config       *config.Config
 	siteRepo     *repository.SiteRepository
 	domainRepo   *repository.DomainRepository
-	nginxService *NginxService
+	nginxService NginxConfigurator
 	certbotMu    sync.Mutex
+
+	// Commands outside the process; replaced in tests.
+	certbot  func(args ...string) ([]byte, error)
+	readCert func(path string) ([]byte, error)
 }
 
 func NewSSLService(cfg *config.Config, siteRepo *repository.SiteRepository, domainRepo *repository.DomainRepository, nginxService *NginxService) *SSLService {
@@ -60,6 +78,57 @@ func NewSSLService(cfg *config.Config, siteRepo *repository.SiteRepository, doma
 		siteRepo:     siteRepo,
 		domainRepo:   domainRepo,
 		nginxService: nginxService,
+		certbot:      runCertbot,
+		readCert:     readCertWithSudo,
+	}
+}
+
+// SetCommands replaces certbot, the certificate reader and nginx. It exists
+// for tests, which cannot run sudo.
+func (s *SSLService) SetCommands(certbot func(args ...string) ([]byte, error), readCert func(path string) ([]byte, error), nginx NginxConfigurator) {
+	s.certbot = certbot
+	s.readCert = readCert
+	s.nginxService = nginx
+}
+
+// IssueCertificateForDomainsAsync starts issuing a certificate for the given
+// domains in the background and returns at once; the outcome lands in the
+// site's ssl_status and ssl_error. started is false when an issuance for the
+// site is already running: the request joins it instead of starting another.
+func (s *SSLService) IssueCertificateForDomainsAsync(siteID int64, domains []string) (started bool, err error) {
+	if len(domains) == 0 {
+		return false, ErrNoDomains
+	}
+	started, err = s.siteRepo.BeginSSLIssuance(siteID)
+	if err != nil || !started {
+		return false, err
+	}
+	go func() {
+		if err := s.issueForDomains(siteID, domains); err != nil {
+			slog.Error("background SSL issuance failed", "site_id", siteID, "domains", domains, "error", err)
+		}
+	}()
+	return true, nil
+}
+
+// RecoverInterrupted fails every issuance that is still running. Call it once
+// at startup: such an issuance was cut off by a restart and would otherwise
+// stay "issuing" for good.
+func (s *SSLService) RecoverInterrupted() (int64, error) {
+	return s.siteRepo.FailInterruptedSSLIssuance(interruptedSSLReason)
+}
+
+// recordOutcome stores the result of an issuance in ssl_status and ssl_error.
+func (s *SSLService) recordOutcome(siteID int64, issueErr error) {
+	status, reason := models.SSLStatusIssued, ""
+	if issueErr != nil {
+		status, reason = models.SSLStatusFailed, issueErr.Error()
+		if len(reason) > maxSSLErrorLength {
+			reason = "..." + reason[len(reason)-maxSSLErrorLength:]
+		}
+	}
+	if err := s.siteRepo.SetSSLStatus(siteID, status, reason); err != nil {
+		slog.Error("failed to record SSL status", "site_id", siteID, "status", status, "error", err)
 	}
 }
 
@@ -67,6 +136,15 @@ func NewSSLService(cfg *config.Config, siteRepo *repository.SiteRepository, doma
 // Uses certbot certonly --webroot to avoid conflicts with nginx config management.
 // A mutex ensures only one certbot process runs at a time.
 func (s *SSLService) IssueCertificate(siteID int64) error {
+	if err := s.siteRepo.SetSSLStatus(siteID, models.SSLStatusIssuing, ""); err != nil {
+		return fmt.Errorf("record SSL status: %w", err)
+	}
+	err := s.issueCertificate(siteID)
+	s.recordOutcome(siteID, err)
+	return err
+}
+
+func (s *SSLService) issueCertificate(siteID int64) error {
 	site, err := s.siteRepo.GetByID(siteID)
 	if err != nil {
 		return fmt.Errorf("get site: %w", err)
@@ -118,7 +196,7 @@ func (s *SSLService) IssueCertificate(siteID int64) error {
 
 	args = append(args, domainArgs...)
 
-	if _, err := runCertbot(args...); err != nil {
+	if _, err := s.certbot(args...); err != nil {
 		slog.Error("certbot failed", "site_id", siteID, "domain", site.Name, "error", err)
 		return err
 	}
@@ -145,6 +223,21 @@ func (s *SSLService) IssueCertificate(siteID int64) error {
 // Unlike IssueCertificate, this allows issuing certs for a subset of hostnames
 // (e.g. only aliases when the primary domain DNS is not pointed to this server).
 func (s *SSLService) IssueCertificateForDomains(siteID int64, domains []string) error {
+	if err := s.siteRepo.SetSSLStatus(siteID, models.SSLStatusIssuing, ""); err != nil {
+		return fmt.Errorf("record SSL status: %w", err)
+	}
+	return s.issueForDomains(siteID, domains)
+}
+
+// issueForDomains runs an issuance whose status is already "issuing" and
+// records its outcome.
+func (s *SSLService) issueForDomains(siteID int64, domains []string) error {
+	err := s.issueCertificateForDomains(siteID, domains)
+	s.recordOutcome(siteID, err)
+	return err
+}
+
+func (s *SSLService) issueCertificateForDomains(siteID int64, domains []string) error {
 	site, err := s.siteRepo.GetByID(siteID)
 	if err != nil {
 		return fmt.Errorf("get site: %w", err)
@@ -184,7 +277,7 @@ func (s *SSLService) IssueCertificateForDomains(siteID int64, domains []string) 
 
 	args = append(args, domainArgs...)
 
-	if _, err := runCertbot(args...); err != nil {
+	if _, err := s.certbot(args...); err != nil {
 		slog.Error("certbot failed", "site_id", siteID, "domains", domains, "error", err)
 		return err
 	}
@@ -259,8 +352,13 @@ func (s *SSLService) GetCertificateInfo(domain string) (*CertificateInfo, error)
 	}, nil
 }
 
-// readCertFile reads a certificate file using sudo (micropanel user has no direct access)
+// readCertFile reads a certificate file.
 func (s *SSLService) readCertFile(path string) ([]byte, error) {
+	return s.readCert(path)
+}
+
+// readCertWithSudo reads a certificate file using sudo (micropanel user has no direct access)
+func readCertWithSudo(path string) ([]byte, error) {
 	cmd := exec.Command("sudo", "/usr/bin/cat", path)
 	output, err := cmd.Output()
 	if err != nil {
@@ -303,7 +401,7 @@ func (s *SSLService) RenewCertificates() error {
 
 	slog.Info("renewing SSL certificates")
 
-	output, err := runCertbot(args...)
+	output, err := s.certbot(args...)
 	if err != nil {
 		slog.Error("certbot renew failed", "error", err)
 		return err
@@ -338,7 +436,7 @@ func (s *SSLService) RevokeCertificate(siteID int64) error {
 
 	slog.Info("revoking SSL certificate", "site_id", siteID, "domain", site.Name)
 
-	if _, err := runCertbot(args...); err != nil {
+	if _, err := s.certbot(args...); err != nil {
 		slog.Error("certbot revoke failed", "site_id", siteID, "error", err)
 		return err
 	}
@@ -376,7 +474,7 @@ func (s *SSLService) DeleteCertificate(siteID int64) error {
 
 	slog.Info("deleting SSL certificate", "site_id", siteID, "domain", site.Name)
 
-	if _, err := runCertbot(args...); err != nil {
+	if _, err := s.certbot(args...); err != nil {
 		slog.Error("certbot delete failed", "site_id", siteID, "error", err)
 		return err
 	}

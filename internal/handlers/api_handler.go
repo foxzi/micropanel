@@ -51,6 +51,27 @@ type siteResponse struct {
 	IsEnabled    bool   `json:"is_enabled"`
 	SSLEnabled   bool   `json:"ssl_enabled"`
 	FixMimeTypes bool   `json:"fix_mime_types"`
+	// SSLStatus is the state of the latest certificate issuance: none,
+	// issuing, issued or failed; SSLError says why it failed.
+	SSLStatus    string `json:"ssl_status"`
+	SSLError     string `json:"ssl_error,omitempty"`
+	SSLExpiresAt string `json:"ssl_expires_at,omitempty"`
+}
+
+func newSiteResponse(site *models.Site) siteResponse {
+	r := siteResponse{
+		ID:           site.ID,
+		Name:         site.Name,
+		IsEnabled:    site.IsEnabled,
+		SSLEnabled:   site.SSLEnabled,
+		FixMimeTypes: site.FixMimeTypes,
+		SSLStatus:    string(site.SSLStatus),
+		SSLError:     site.SSLError,
+	}
+	if site.SSLExpiresAt != nil {
+		r.SSLExpiresAt = site.SSLExpiresAt.UTC().Format(time.RFC3339)
+	}
+	return r
 }
 
 type deployResponse struct {
@@ -100,6 +121,9 @@ type errorResponse struct {
 
 type issueSSLRequest struct {
 	Mode string `json:"mode"` // "all" (default), "primary", "aliases", "none"
+	// Async issues the certificate in the background: the request answers
+	// 202 at once and the outcome is read from the site's ssl_status.
+	Async bool `json:"async"`
 }
 
 type createDomainRequest struct {
@@ -149,13 +173,7 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 
 	// If site with this name already exists, return it (idempotent create).
 	if existing, _ := h.siteService.GetByName(req.Name); existing != nil {
-		c.JSON(http.StatusOK, siteResponse{
-			ID:           existing.ID,
-			Name:         existing.Name,
-			IsEnabled:    existing.IsEnabled,
-			SSLEnabled:   existing.SSLEnabled,
-			FixMimeTypes: existing.FixMimeTypes,
-		})
+		c.JSON(http.StatusOK, newSiteResponse(existing))
 		return
 	}
 
@@ -202,13 +220,7 @@ func (h *APIHandler) CreateSite(c *gin.Context) {
 		"api_token": tokenName,
 	}, c.ClientIP())
 
-	c.JSON(http.StatusCreated, siteResponse{
-		ID:           site.ID,
-		Name:         site.Name,
-		IsEnabled:    site.IsEnabled,
-		SSLEnabled:   site.SSLEnabled,
-		FixMimeTypes: site.FixMimeTypes,
-	})
+	c.JSON(http.StatusCreated, newSiteResponse(site))
 }
 
 // ListSites returns sites owned by the token's user.
@@ -238,13 +250,7 @@ func (h *APIHandler) ListSites(c *gin.Context) {
 
 	var response []siteResponse
 	for _, site := range sites {
-		response = append(response, siteResponse{
-			ID:           site.ID,
-			Name:         site.Name,
-			IsEnabled:    site.IsEnabled,
-			SSLEnabled:   site.SSLEnabled,
-			FixMimeTypes: site.FixMimeTypes,
-		})
+		response = append(response, newSiteResponse(site))
 	}
 
 	if response == nil {
@@ -293,13 +299,7 @@ func (h *APIHandler) GetSite(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, siteResponse{
-		ID:           site.ID,
-		Name:         site.Name,
-		IsEnabled:    site.IsEnabled,
-		SSLEnabled:   site.SSLEnabled,
-		FixMimeTypes: site.FixMimeTypes,
-	})
+	c.JSON(http.StatusOK, newSiteResponse(site))
 }
 
 // DeleteSite deletes a site by ID.
@@ -620,9 +620,7 @@ func (h *APIHandler) IssueSSL(c *gin.Context) {
 
 	// "none" — skip SSL
 	if mode == "none" {
-		c.JSON(http.StatusOK, siteResponse{
-			ID: site.ID, Name: site.Name, IsEnabled: site.IsEnabled, SSLEnabled: site.SSLEnabled, FixMimeTypes: site.FixMimeTypes,
-		})
+		c.JSON(http.StatusOK, newSiteResponse(site))
 		return
 	}
 
@@ -659,6 +657,27 @@ func (h *APIHandler) IssueSSL(c *gin.Context) {
 		return
 	}
 
+	if req.Async {
+		started, err := h.sslService.IssueCertificateForDomainsAsync(siteID, domains)
+		if err != nil {
+			slog.Error("failed to start SSL issuance via API", "site_id", siteID, "mode", mode, "error", err)
+			c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to start SSL issuance"})
+			return
+		}
+		if started {
+			h.auditSSLIssue(c, site.Name, mode, domains)
+		}
+		site, err = h.siteService.GetByID(siteID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to load site"})
+			return
+		}
+		// While the background issuance runs the status is "issuing"; it
+		// may already have finished by the time the site is read.
+		c.JSON(http.StatusAccepted, newSiteResponse(site))
+		return
+	}
+
 	slog.Info("issuing SSL via API", "site_id", siteID, "mode", mode, "domains", domains)
 
 	if err := h.sslService.IssueCertificateForDomains(siteID, domains); err != nil {
@@ -670,25 +689,23 @@ func (h *APIHandler) IssueSSL(c *gin.Context) {
 	// Reload site to get updated SSL status
 	site, _ = h.siteService.GetByID(siteID)
 
+	h.auditSSLIssue(c, site.Name, mode, domains)
+
+	c.JSON(http.StatusOK, newSiteResponse(site))
+}
+
+func (h *APIHandler) auditSSLIssue(c *gin.Context, siteName, mode string, domains []string) {
 	token := middleware.GetAPIToken(c)
 	tokenName := ""
 	if token != nil {
 		tokenName = token.Name
 	}
 	h.auditService.LogAnonymous(services.ActionSSLIssue, services.EntitySite, map[string]string{
-		"site_name": site.Name,
+		"site_name": siteName,
 		"mode":      mode,
 		"domains":   strings.Join(domains, ","),
 		"api_token": tokenName,
 	}, c.ClientIP())
-
-	c.JSON(http.StatusOK, siteResponse{
-		ID:           site.ID,
-		Name:         site.Name,
-		IsEnabled:    site.IsEnabled,
-		SSLEnabled:   site.SSLEnabled,
-		FixMimeTypes: site.FixMimeTypes,
-	})
 }
 
 // CreateDomain adds an alias domain to a site.

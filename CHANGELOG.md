@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Intended as 1.4.0.
+
+### Added
+- API `POST /api/v1/sites/{id}/deploy` accepts an `Idempotency-Key` header: a retry with the key of a successful deploy returns that deploy with `"replayed": true` without unpacking the archive again (`public_prev` is kept); the key of a running deploy answers `409` with its `deploy_id`; the key of a failed deploy retries in the same record
+- API `GET /api/v1/sites/{id}/deploys` lists a site's deploys newest first (`limit`, default 20, at most 100; `idempotency_key` filter)
+- API `POST /api/v1/sites/{id}/ssl` accepts `"async": true`: answers `202` at once and issues the certificate in the background
+- Site object in the API carries `ssl_status` (`none`, `issuing`, `issued`, `failed`), `ssl_error` and `ssl_expires_at`
+- Migrations `008_deploy_idempotency` and `009_ssl_status`
+
+### Changed
+- Deploys of one site run one at a time (concurrent deploys raced on `public_new`)
+- Deploys and certificate issuances still running at startup were cut off by a restart and are marked failed with a reason
+
+### Documentation
+- API reference describes every route, including site aliases and certificate issuance, and corrects the defaults of `POST /api/v1/sites` (`ssl` is `false`; an existing name answers `200` with the existing site)
+
 ## [1.3.14] - 2026-04-29
 
 ### Fixed

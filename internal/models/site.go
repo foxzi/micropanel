@@ -12,6 +12,8 @@ type Site struct {
 	SSLCertName  string     `json:"ssl_cert_name,omitempty"` // certbot --cert-name (may differ from Name)
 	WWWAlias     bool       `json:"www_alias"`               // Add www. alias
 	FixMimeTypes bool       `json:"fix_mime_types"`          // Fix MIME types for files with encoded query strings
+	SSLStatus    SSLStatus  `json:"ssl_status"`              // State of the latest certificate issuance
+	SSLError     string     `json:"ssl_error,omitempty"`     // Why the latest issuance failed
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 
@@ -19,6 +21,16 @@ type Site struct {
 	Owner   *User    `json:"owner,omitempty"`
 	Aliases []Domain `json:"aliases,omitempty"` // Additional domains
 }
+
+// SSLStatus is the state of a site's latest certificate issuance.
+type SSLStatus string
+
+const (
+	SSLStatusNone    SSLStatus = "none"
+	SSLStatusIssuing SSLStatus = "issuing"
+	SSLStatusIssued  SSLStatus = "issued"
+	SSLStatusFailed  SSLStatus = "failed"
+)
 
 // GetSSLCertName returns the certificate name for letsencrypt paths.
 // Falls back to Site.Name if SSLCertName is not set.
