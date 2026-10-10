@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"micropanel/internal/config"
@@ -34,12 +35,22 @@ var (
 	ErrSymlinkDetected    = errors.New("symlinks not allowed")
 	ErrFileTooLarge       = errors.New("file too large")
 	ErrUnsupportedArchive = errors.New("unsupported archive format")
+	// ErrDeployInProgress means a deploy with the same idempotency key has not
+	// finished yet.
+	ErrDeployInProgress = errors.New("deploy with this idempotency key is in progress")
 )
+
+// interruptedReason is the error of a deploy that was still pending when the
+// panel started.
+const interruptedReason = "deploy interrupted by a panel restart"
 
 type DeployService struct {
 	config     *config.Config
 	deployRepo *repository.DeployRepository
 	siteRepo   *repository.SiteRepository
+
+	// siteLocks serialises deploys of one site: they share public_new.
+	siteLocks sync.Map // site ID -> *sync.Mutex
 }
 
 func NewDeployService(cfg *config.Config, deployRepo *repository.DeployRepository, siteRepo *repository.SiteRepository) *DeployService {
@@ -67,8 +78,85 @@ func (s *DeployService) Deploy(siteID, userID int64, filename string, archiveRea
 		return nil, fmt.Errorf("create deploy record: %w", err)
 	}
 
-	// Process deploy
-	if err := s.processDeploy(deploy, archiveReader, size); err != nil {
+	return s.run(deploy, archiveReader, size)
+}
+
+// DeployWithKey deploys an archive under an idempotency key. A key whose
+// deploy succeeded returns that deploy with replayed = true and does not touch
+// the site; a key whose deploy is still running returns it with
+// ErrDeployInProgress; a key whose deploy failed is retried in the same
+// record. An empty key behaves like Deploy.
+func (s *DeployService) DeployWithKey(siteID, userID int64, key, filename string, archiveReader io.Reader, size int64) (deploy *models.Deploy, replayed bool, err error) {
+	if key == "" {
+		deploy, err = s.Deploy(siteID, userID, filename, archiveReader, size)
+		return deploy, false, err
+	}
+	if size > MaxArchiveSize {
+		return nil, false, ErrArchiveTooLarge
+	}
+
+	// A few rounds cover the races between concurrent requests with one key:
+	// each round either acts or observes a state another request settled.
+	for range 3 {
+		existing, err := s.deployRepo.GetByKey(siteID, key)
+		if errors.Is(err, repository.ErrNotFound) {
+			deploy = &models.Deploy{
+				SiteID:         siteID,
+				UserID:         userID,
+				Filename:       filename,
+				Status:         models.DeployStatusPending,
+				IdempotencyKey: key,
+			}
+			err = s.deployRepo.Create(deploy)
+			if errors.Is(err, repository.ErrDuplicateKey) {
+				continue
+			}
+			if err != nil {
+				return nil, false, fmt.Errorf("create deploy record: %w", err)
+			}
+			deploy, err = s.run(deploy, archiveReader, size)
+			return deploy, false, err
+		}
+		if err != nil {
+			return nil, false, fmt.Errorf("load deploy: %w", err)
+		}
+
+		switch existing.Status {
+		case models.DeployStatusSuccess:
+			return existing, true, nil
+		case models.DeployStatusPending:
+			return existing, false, ErrDeployInProgress
+		case models.DeployStatusFailed:
+			claimed, err := s.deployRepo.ClaimFailed(existing.ID, userID, filename)
+			if err != nil {
+				return nil, false, fmt.Errorf("claim failed deploy: %w", err)
+			}
+			if !claimed {
+				continue
+			}
+			existing.Status = models.DeployStatusPending
+			existing.ErrorMessage = ""
+			existing.UserID = userID
+			existing.Filename = filename
+			deploy, err = s.run(existing, archiveReader, size)
+			return deploy, false, err
+		}
+	}
+	existing, err := s.deployRepo.GetByKey(siteID, key)
+	if err != nil {
+		return nil, false, fmt.Errorf("load deploy: %w", err)
+	}
+	return existing, false, ErrDeployInProgress
+}
+
+// run unpacks the archive of a pending deploy and records the outcome.
+func (s *DeployService) run(deploy *models.Deploy, archiveReader io.Reader, size int64) (*models.Deploy, error) {
+	lock := s.siteLock(deploy.SiteID)
+	lock.Lock()
+	err := s.processDeploy(deploy, archiveReader, size)
+	lock.Unlock()
+
+	if err != nil {
 		s.deployRepo.UpdateStatus(deploy.ID, models.DeployStatusFailed, err.Error())
 		deploy.Status = models.DeployStatusFailed
 		deploy.ErrorMessage = err.Error()
@@ -78,6 +166,18 @@ func (s *DeployService) Deploy(siteID, userID int64, filename string, archiveRea
 	s.deployRepo.UpdateStatus(deploy.ID, models.DeployStatusSuccess, "")
 	deploy.Status = models.DeployStatusSuccess
 	return deploy, nil
+}
+
+func (s *DeployService) siteLock(siteID int64) *sync.Mutex {
+	lock, _ := s.siteLocks.LoadOrStore(siteID, &sync.Mutex{})
+	return lock.(*sync.Mutex)
+}
+
+// RecoverInterrupted fails every deploy that is still pending. Call it once at
+// startup, before serving: such a deploy was cut off by a restart, and leaving
+// it pending would block its idempotency key for good.
+func (s *DeployService) RecoverInterrupted() (int64, error) {
+	return s.deployRepo.FailPending(interruptedReason)
 }
 
 func (s *DeployService) processDeploy(deploy *models.Deploy, archiveReader io.Reader, size int64) error {
@@ -536,6 +636,15 @@ func (s *DeployService) Rollback(siteID int64) error {
 }
 
 func (s *DeployService) ListDeploys(siteID int64, limit int) ([]*models.Deploy, error) {
+	return s.deployRepo.ListBySite(siteID, limit)
+}
+
+// ListDeploysFiltered returns the site's latest deploys, or only the deploy
+// with the given idempotency key when key is not empty.
+func (s *DeployService) ListDeploysFiltered(siteID int64, key string, limit int) ([]*models.Deploy, error) {
+	if key != "" {
+		return s.deployRepo.ListBySiteAndKey(siteID, key)
+	}
 	return s.deployRepo.ListBySite(siteID, limit)
 }
 

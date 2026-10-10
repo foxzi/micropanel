@@ -88,6 +88,11 @@ func runServe(cmd *cobra.Command, args []string) {
 	nginxService.SetRedirectRepo(redirectRepo)
 	nginxService.SetAuthZoneRepo(authZoneRepo)
 	deployService := services.NewDeployService(cfg, deployRepo, siteRepo)
+	if n, err := deployService.RecoverInterrupted(); err != nil {
+		log.Fatalf("Failed to recover interrupted deploys: %v", err)
+	} else if n > 0 {
+		log.Printf("Marked %d deploys interrupted by a restart as failed", n)
+	}
 	sslService := services.NewSSLService(cfg, siteRepo, domainRepo, nginxService)
 	redirectService := services.NewRedirectService(redirectRepo, nginxService)
 	authZoneService := services.NewAuthZoneService(cfg, authZoneRepo, nginxService)
@@ -212,6 +217,7 @@ func runServe(cmd *cobra.Command, args []string) {
 			apiGroup.GET("/sites/:id", apiHandler.GetSite)
 			apiGroup.DELETE("/sites/:id", apiHandler.DeleteSite)
 			apiGroup.POST("/sites/:id/deploy", apiHandler.Deploy)
+			apiGroup.GET("/sites/:id/deploys", apiHandler.ListDeploys)
 
 			apiGroup.POST("/sites/:id/domains", apiHandler.CreateDomain)
 			apiGroup.GET("/sites/:id/domains", apiHandler.ListDomains)

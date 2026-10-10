@@ -17,5 +17,8 @@ type Deploy struct {
 	Filename     string       `json:"filename"`
 	Status       DeployStatus `json:"status"`
 	ErrorMessage string       `json:"error_message,omitempty"`
-	CreatedAt    time.Time    `json:"created_at"`
+	// IdempotencyKey is set by API clients that retry a deploy safely; empty
+	// for deploys without a key.
+	IdempotencyKey string    `json:"idempotency_key,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
 }

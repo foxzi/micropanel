@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -55,6 +56,42 @@ type siteResponse struct {
 type deployResponse struct {
 	DeployID int64  `json:"deploy_id"`
 	Status   string `json:"status"`
+	// Replayed is true when the request repeated the idempotency key of a
+	// finished deploy and the archive was not unpacked again.
+	Replayed bool `json:"replayed,omitempty"`
+}
+
+type deployListItem struct {
+	ID             int64  `json:"id"`
+	Status         string `json:"status"`
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
+	Error          string `json:"error,omitempty"`
+	CreatedAt      string `json:"created_at"`
+}
+
+// idempotencyKeyHeader carries the client's key for a safe deploy retry.
+const idempotencyKeyHeader = "Idempotency-Key"
+
+// maxIdempotencyKeyLength bounds the stored key.
+const maxIdempotencyKeyLength = 255
+
+// Deploy list limits for GET /api/v1/sites/:id/deploys.
+const (
+	defaultDeployListLimit = 20
+	maxDeployListLimit     = 100
+)
+
+// validIdempotencyKey accepts 1..255 visible ASCII characters.
+func validIdempotencyKey(key string) bool {
+	if key == "" || len(key) > maxIdempotencyKeyLength {
+		return false
+	}
+	for i := 0; i < len(key); i++ {
+		if key[i] < 0x21 || key[i] > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 type errorResponse struct {
@@ -330,6 +367,12 @@ func (h *APIHandler) Deploy(c *gin.Context) {
 		return
 	}
 
+	key := c.GetHeader(idempotencyKeyHeader)
+	if _, sent := c.Request.Header[idempotencyKeyHeader]; sent && !validIdempotencyKey(key) {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid Idempotency-Key: 1-255 visible ASCII characters"})
+		return
+	}
+
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "file is required"})
@@ -364,12 +407,15 @@ func (h *APIHandler) Deploy(c *gin.Context) {
 
 	// Deploy using token's user ID
 	userID := getTokenUserID(c)
-	deploy, err := h.deployService.Deploy(site.ID, userID, header.Filename, file, header.Size)
+	deploy, replayed, err := h.deployService.DeployWithKey(site.ID, userID, key, header.Filename, file, header.Size)
 	if err != nil {
 		status := http.StatusInternalServerError
 		errMsg := "deploy failed"
 
 		switch {
+		case errors.Is(err, services.ErrDeployInProgress):
+			c.JSON(http.StatusConflict, gin.H{"error": "deploy with this idempotency key is in progress", "deploy_id": deploy.ID})
+			return
 		case errors.Is(err, services.ErrArchiveTooLarge):
 			status = http.StatusRequestEntityTooLarge
 			errMsg = "archive too large"
@@ -408,7 +454,64 @@ func (h *APIHandler) Deploy(c *gin.Context) {
 	c.JSON(http.StatusOK, deployResponse{
 		DeployID: deploy.ID,
 		Status:   string(deploy.Status),
+		Replayed: replayed,
 	})
+}
+
+// ListDeploys returns the latest deploys of a site, newest first.
+// GET /api/v1/sites/:id/deploys?limit=N&idempotency_key=K
+//
+// limit defaults to 20 and is capped at 100; with idempotency_key only the
+// deploy with that key is returned (an empty list if there is none).
+func (h *APIHandler) ListDeploys(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid site ID"})
+		return
+	}
+
+	limit := defaultDeployListLimit
+	if raw := c.Query("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 {
+			c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid limit"})
+			return
+		}
+		limit = min(n, maxDeployListLimit)
+	}
+
+	site, err := h.siteService.GetByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, errorResponse{Error: "site not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to load site"})
+		return
+	}
+
+	if !h.canAccessSite(c, site) {
+		c.JSON(http.StatusForbidden, errorResponse{Error: "access denied"})
+		return
+	}
+
+	deploys, err := h.deployService.ListDeploysFiltered(site.ID, c.Query("idempotency_key"), limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "failed to list deploys"})
+		return
+	}
+
+	response := make([]deployListItem, 0, len(deploys))
+	for _, d := range deploys {
+		response = append(response, deployListItem{
+			ID:             d.ID,
+			Status:         string(d.Status),
+			IdempotencyKey: d.IdempotencyKey,
+			Error:          d.ErrorMessage,
+			CreatedAt:      d.CreatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *APIHandler) resolveSiteFromFilename(c *gin.Context, requestedID int64, filename string) (*models.Site, error) {
