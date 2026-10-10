@@ -163,8 +163,10 @@ func runSiteDelete(cmd *cobra.Command, args []string) {
 		log.Fatalf("Site not found: %d", siteID)
 	}
 
-	// Remove nginx config
-	nginxSvc.RemoveConfig(site.ID)
+	// Remove nginx config and restart nginx, so the site stops being served
+	if err := nginxSvc.RemoveAndReload(site.ID); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove nginx config: %v\n", err)
+	}
 
 	if err := svc.Delete(site.ID); err != nil {
 		log.Fatalf("Failed to delete site: %v", err)

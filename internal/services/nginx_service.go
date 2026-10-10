@@ -21,6 +21,10 @@ type NginxService struct {
 	domainRepo   *repository.DomainRepository
 	redirectRepo *repository.RedirectRepository
 	authZoneRepo *repository.AuthZoneRepository
+
+	// command builds the commands the service runs; replaced in tests, which
+	// cannot run sudo.
+	command func(name string, args ...string) *exec.Cmd
 }
 
 func NewNginxService(cfg *config.Config, siteRepo *repository.SiteRepository, domainRepo *repository.DomainRepository) *NginxService {
@@ -28,6 +32,7 @@ func NewNginxService(cfg *config.Config, siteRepo *repository.SiteRepository, do
 		config:     cfg,
 		siteRepo:   siteRepo,
 		domainRepo: domainRepo,
+		command:    exec.Command,
 	}
 }
 
@@ -260,7 +265,7 @@ func (s *NginxService) WriteConfig(siteID int64) error {
 	slog.Debug("writing nginx config", "site_id", siteID, "path", configPath, "config", config)
 
 	// Write config via sudo tee (micropanel user has no direct write access)
-	cmd := exec.Command("sudo", "tee", configPath)
+	cmd := s.command("sudo", "tee", configPath)
 	cmd.Stdin = strings.NewReader(config)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("write config file: %w: %s", err, string(output))
@@ -273,15 +278,25 @@ func (s *NginxService) RemoveConfig(siteID int64) error {
 	configPath := s.getConfigPath(siteID)
 
 	// Remove config via sudo rm (micropanel user has no direct write access)
-	cmd := exec.Command("sudo", "rm", "-f", configPath)
+	cmd := s.command("sudo", "rm", "-f", configPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("remove config file: %w: %s", err, string(output))
 	}
 	return nil
 }
 
+// RemoveAndReload removes a site's config and restarts nginx. Removing the
+// file alone is not enough: nginx keeps serving the site from the
+// configuration it loaded until it is restarted.
+func (s *NginxService) RemoveAndReload(siteID int64) error {
+	if err := s.RemoveConfig(siteID); err != nil {
+		return err
+	}
+	return s.Reload()
+}
+
 func (s *NginxService) TestConfig() error {
-	cmd := exec.Command("sudo", "nginx", "-t")
+	cmd := s.command("sudo", "nginx", "-t")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		slog.Error("nginx config test failed", "output", string(output), "error", err)
@@ -298,7 +313,7 @@ func (s *NginxService) Reload() error {
 
 	// Use systemctl restart instead of nginx -s reload because reload
 	// does not always pick up changes in included files (e.g. hack.conf)
-	cmd := exec.Command("sudo", "systemctl", "restart", "nginx")
+	cmd := s.command("sudo", "systemctl", "restart", "nginx")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("nginx restart failed: %s", string(output))
@@ -322,13 +337,13 @@ func (s *NginxService) ApplyConfig(siteID int64) error {
 		// Rollback on failure
 		var rollbackErr error
 		if len(existingConfig) > 0 {
-			cmd := exec.Command("sudo", "tee", configPath)
+			cmd := s.command("sudo", "tee", configPath)
 			cmd.Stdin = strings.NewReader(string(existingConfig))
 			if output, cmdErr := cmd.CombinedOutput(); cmdErr != nil {
 				rollbackErr = fmt.Errorf("rollback failed: %s", string(output))
 			}
 		} else {
-			if output, cmdErr := exec.Command("sudo", "rm", "-f", configPath).CombinedOutput(); cmdErr != nil {
+			if output, cmdErr := s.command("sudo", "rm", "-f", configPath).CombinedOutput(); cmdErr != nil {
 				rollbackErr = fmt.Errorf("rollback cleanup failed: %s", string(output))
 			}
 		}

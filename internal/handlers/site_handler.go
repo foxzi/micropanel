@@ -268,8 +268,10 @@ func (h *SiteHandler) Delete(c *gin.Context) {
 		}
 	}
 
-	// Remove nginx config
-	h.nginxService.RemoveConfig(id)
+	// Remove nginx config and restart nginx, so the site stops being served
+	if err := h.nginxService.RemoveAndReload(id); err != nil {
+		slog.Error("failed to remove nginx config during site deletion", "site_id", id, "error", err)
+	}
 
 	if err := h.siteService.Delete(id); err != nil {
 		c.String(http.StatusInternalServerError, "Error deleting site")

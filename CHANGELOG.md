@@ -16,6 +16,9 @@ Intended as 1.4.0.
 - Site object in the API carries `ssl_status` (`none`, `issuing`, `issued`, `failed`), `ssl_error` and `ssl_expires_at`
 - Migrations `008_deploy_idempotency` and `009_ssl_status`
 
+### Fixed
+- Deleting a site (API `DELETE /api/v1/sites/{id}`, web UI, `micropanel site delete`) now restarts nginx after removing the site's config; before, nginx kept serving the deleted site from memory until something else restarted it
+
 ### Changed
 - Deploys of one site run one at a time (concurrent deploys raced on `public_new`)
 - Deploys and certificate issuances still running at startup were cut off by a restart and are marked failed with a reason
