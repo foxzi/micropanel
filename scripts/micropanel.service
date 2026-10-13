@@ -11,6 +11,11 @@ ExecStart=/usr/bin/micropanel serve
 Restart=on-failure
 RestartSec=5
 
+# Ensure /var/lib/micropanel exists with correct ownership on every start.
+# Removes the race between dpkg/nfpm chown in postinstall and systemd restart.
+StateDirectory=micropanel
+StateDirectoryMode=0750
+
 # Security
 ProtectSystem=strict
 ProtectHome=true

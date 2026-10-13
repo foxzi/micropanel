@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-10-13
+
+### Fixed
+- Fresh installs and upgrades no longer race between dpkg/nfpm `chown -R micropanel:micropanel /var/lib/micropanel` and systemd restarting the service: the postinstall now stops the unit before touching ownership and only `try-restart`s it at the end if it was active, and the unit declares `StateDirectory=micropanel` so systemd guarantees `/var/lib/micropanel` exists with the right owner before `ExecStart`; without this fix an unlucky upgrade could leave micropanel looping on `Failed to run migrations: attempt to write a readonly database`
+
 ## [1.4.1] - 2026-10-13
 
 ### Fixed

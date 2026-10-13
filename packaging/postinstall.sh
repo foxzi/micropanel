@@ -1,6 +1,19 @@
 #!/bin/bash
 set -e
 
+# Stop the service during the install/upgrade window so we don't race with
+# ownership fixes below. We'll try-restart it at the end only if it was active.
+WAS_ACTIVE=0
+if systemctl is-active --quiet micropanel 2>/dev/null; then
+    WAS_ACTIVE=1
+fi
+systemctl stop micropanel >/dev/null 2>&1 || true
+
+# Make sure the state directory exists with the correct ownership BEFORE any
+# chown -R walks it. Covers upgrades from older versions where /var/lib/micropanel
+# might have been created by a prior failed start as root.
+install -d -o micropanel -g micropanel -m 0750 /var/lib/micropanel
+
 # Set ownership
 chown -R micropanel:micropanel /var/lib/micropanel
 chown -R micropanel:micropanel /var/www/panel/sites
@@ -103,3 +116,10 @@ echo "  4. Start service: systemctl enable --now micropanel"
 echo ""
 echo "NOTE: Service will not start until config and admin user are set up!"
 echo ""
+
+# If the service was active before this install (i.e. an upgrade of a running
+# instance), restart it now that ownership is sane. Never start it on a fresh
+# install where admin/config aren't ready - serve would just fail validation.
+if [ "$WAS_ACTIVE" = "1" ]; then
+    systemctl try-restart micropanel >/dev/null 2>&1 || true
+fi
