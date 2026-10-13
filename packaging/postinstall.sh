@@ -118,8 +118,10 @@ echo "NOTE: Service will not start until config and admin user are set up!"
 echo ""
 
 # If the service was active before this install (i.e. an upgrade of a running
-# instance), restart it now that ownership is sane. Never start it on a fresh
-# install where admin/config aren't ready - serve would just fail validation.
+# instance), start it now that ownership is sane. We use `start` and not
+# `try-restart` because we stopped it ourselves at the top of this script.
+# Never start it on a fresh install where admin/config aren't ready - serve
+# would just fail validation.
 if [ "$WAS_ACTIVE" = "1" ]; then
-    systemctl try-restart micropanel >/dev/null 2>&1 || true
+    systemctl start micropanel >/dev/null 2>&1 || true
 fi

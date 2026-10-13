@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-10-13
+
+### Fixed
+- Package upgrades no longer leave the service stopped: 1.4.2's postinstall stops the unit before fixing ownership and then calls `try-restart`, which is a no-op on an inactive unit, so after `apt install` the service stayed down until started by hand; the postinstall now calls `systemctl start micropanel` when the unit was active before the upgrade
+
 ## [1.4.2] - 2026-10-13
 
 ### Fixed
