@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Intended as 1.4.0.
+## [1.4.0] - 2026-10-13
 
 ### Added
 - API `POST /api/v1/sites/{id}/deploy` accepts an `Idempotency-Key` header: a retry with the key of a successful deploy returns that deploy with `"replayed": true` without unpacking the archive again (`public_prev` is kept); the key of a running deploy answers `409` with its `deploy_id`; the key of a failed deploy retries in the same record
