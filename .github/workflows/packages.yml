@@ -43,7 +43,7 @@ jobs:
 
       - name: Install tools and cross-compiler
         run: |
-          go install github.com/a-h/templ/cmd/templ@latest
+          go install github.com/a-h/templ/cmd/templ@v0.3.977
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
           if [ "${{ matrix.arch }}" = "arm64" ]; then
             sudo apt-get update

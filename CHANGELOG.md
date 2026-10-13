@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-13
+
+### Fixed
+- CI pins the `templ` CLI to the `go.mod` runtime version (`v0.3.977`) so the generated `*_templ.go` files stop referring to symbols that only exist in newer runtimes; without this the 1.4.0 build and package jobs failed on `undefined: templ.ResolveAttributeValue`
+
 ## [1.4.0] - 2026-10-13
 
 ### Added
