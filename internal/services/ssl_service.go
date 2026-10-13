@@ -376,16 +376,21 @@ func (s *SSLService) CheckAndUpdateSSLStatus(siteID int64) error {
 
 	certName := site.GetSSLCertName()
 	expiresAt, err := s.GetCertificateExpiry(certName)
+	status := models.SSLStatusIssued
 	if err != nil {
 		// Certificate not found or invalid - mark as not SSL
 		site.SSLEnabled = false
 		site.SSLExpiresAt = nil
+		status = models.SSLStatusNone
 	} else {
 		site.SSLEnabled = true
 		site.SSLExpiresAt = expiresAt
 	}
 
-	return s.siteRepo.Update(site)
+	if err := s.siteRepo.Update(site); err != nil {
+		return err
+	}
+	return s.siteRepo.SetSSLStatus(siteID, status, "")
 }
 
 // RenewCertificates runs certbot renew for all certificates
@@ -447,6 +452,9 @@ func (s *SSLService) RevokeCertificate(siteID int64) error {
 	if err := s.siteRepo.Update(site); err != nil {
 		return fmt.Errorf("update site SSL status: %w", err)
 	}
+	if err := s.siteRepo.SetSSLStatus(siteID, models.SSLStatusNone, ""); err != nil {
+		return fmt.Errorf("clear SSL status: %w", err)
+	}
 
 	// Regenerate nginx config without SSL
 	if err := s.nginxService.ApplyConfig(siteID); err != nil {
@@ -482,7 +490,10 @@ func (s *SSLService) DeleteCertificate(siteID int64) error {
 	// Update site SSL status
 	site.SSLEnabled = false
 	site.SSLExpiresAt = nil
-	return s.siteRepo.Update(site)
+	if err := s.siteRepo.Update(site); err != nil {
+		return err
+	}
+	return s.siteRepo.SetSSLStatus(siteID, models.SSLStatusNone, "")
 }
 
 // CertificateInfo holds parsed certificate information

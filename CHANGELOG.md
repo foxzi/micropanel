@@ -18,6 +18,7 @@ Intended as 1.4.0.
 
 ### Fixed
 - Deleting a site (API `DELETE /api/v1/sites/{id}`, web UI, `micropanel site delete`) now restarts nginx after removing the site's config; before, nginx kept serving the deleted site from memory until something else restarted it
+- Revoking or deleting a certificate (and the periodic SSL status check) now also clears `ssl_status` to `none`, so the API no longer reports `ssl_status: issued` for a site with `ssl_enabled: false`
 
 ### Changed
 - Deploys of one site run one at a time (concurrent deploys raced on `public_new`)
@@ -25,6 +26,9 @@ Intended as 1.4.0.
 
 ### Documentation
 - API reference describes every route, including site aliases and certificate issuance, and corrects the defaults of `POST /api/v1/sites` (`ssl` is `false`; an existing name answers `200` with the existing site)
+
+### Upgrade notes
+- Migrations `008` and `009` extend the schema; back up `/var/lib/micropanel/*.db` before upgrading. Downgrading to 1.3.x after the upgrade requires running `009_ssl_status.down.sql` and `008_deploy_idempotency.down.sql` by hand and resetting the `schema_migrations` row to version 7, because 1.3.x refuses to start on a newer schema
 
 ## [1.3.14] - 2026-04-29
 
