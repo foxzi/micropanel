@@ -1,6 +1,6 @@
 .PHONY: dev build templ migrate-up migrate-down test clean package-deb package-rpm
 
-VERSION ?= 1.4.3
+VERSION ?= 1.4.4
 GOARCH ?= amd64
 
 # Development

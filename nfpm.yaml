@@ -72,6 +72,13 @@ contents:
     file_info:
       mode: 0644
 
+  # Open files limit for root, needed by `sudo nginx -t` with many sites
+  - src: scripts/limits-nofile.conf
+    dst: /etc/security/limits.d/90-micropanel-nofile.conf
+    type: config|noreplace
+    file_info:
+      mode: 0644
+
   # Nginx MIME type fix for files with encoded query strings
   - src: scripts/hack.conf
     dst: /etc/nginx/hack.conf

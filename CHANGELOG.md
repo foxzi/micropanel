@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-11-02
+
+### Fixed
+- New sites stopped getting nginx configs at about 500 sites: `sudo nginx -t` opens two log files per site and hit the default 1024 open files limit, so the config was rolled back and the site returned 404; the package now ships `/etc/security/limits.d/90-micropanel-nofile.conf` raising the root nofile limit to 65536
+
 ## [1.4.3] - 2026-10-13
 
 ### Fixed
