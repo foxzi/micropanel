@@ -330,6 +330,90 @@ and its `www.` cannot be aliases (`400`). `GET` returns an array of aliases,
 a certificate use `POST /api/v1/sites/:id/ssl` with `mode` `all` or
 `aliases`.
 
+### Redirects
+
+Redirects of a site, the same ones the web panel manages (nginx `return`
+inside a `location`).
+
+```
+GET /api/v1/sites/:id/redirects
+POST /api/v1/sites/:id/redirects
+DELETE /api/v1/sites/:id/redirects/:redirectId
+```
+
+`POST` takes:
+
+| Field | Description |
+|-------|-------------|
+| `source_path` | Required. Path to match, starts with `/`. `/` matches every request |
+| `target_url` | Required. `http://` or `https://` URL, or a relative one |
+| `code` | `301` (default) or `302` |
+| `preserve_path` | Append the request path to `target_url`; default `false` |
+| `preserve_query` | Append the query string; default `false` |
+| `priority` | Sort order in the list, higher first; default `0` |
+
+It answers `201 Created` with the redirect:
+
+```json
+{
+  "id": 5,
+  "site_id": 2,
+  "source_path": "/",
+  "target_url": "https://example.com",
+  "code": 301,
+  "preserve_path": true,
+  "preserve_query": true,
+  "priority": 0,
+  "is_enabled": true
+}
+```
+
+Repeating a redirect with the same `source_path`, `target_url`, `code` and
+preserve flags answers `200 OK` with the existing one; the same `source_path`
+with other settings is `409 Conflict`. `GET` returns an array, `DELETE`
+returns `{"message": "redirect deleted"}`. The nginx config is rewritten and
+reloaded on every change; if nginx refuses it, the config is rolled back,
+the redirect is not kept and the answer is `500`.
+
+A redirect on `/` replaces the site's static `location /`, so the site serves
+nothing else. The ACME challenge path stays reachable, so a certificate can
+still be issued.
+
+**Errors:**
+- `400 Bad Request` — invalid ID, missing field, code other than 301/302, invalid path or URL
+- `403 Forbidden` — another user's site or a redirect of another site
+- `404 Not Found` — site or redirect not found (a JSON `error` body; a panel older than this API answers a bare `404 page not found` to these routes, which is how clients detect it)
+- `500 Internal Server Error` — nginx refused the config
+
+#### Redirecting a secondary domain to the main one
+
+An alias (`/sites/:id/domains`) is one more name of the same site and serves
+the same content, so a redirect on that site would redirect the main domain
+as well. A domain that should answer `301` to another one is its own site:
+
+```bash
+# 1. a site named after the secondary domain
+curl -X POST http://localhost:8080/api/v1/sites \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "second.example"}'
+# 2. everything goes to the main domain, path and query kept
+curl -X POST http://localhost:8080/api/v1/sites/2/redirects \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{"source_path": "/", "target_url": "https://example.com", "code": 301, "preserve_path": true, "preserve_query": true}'
+# 3. a certificate, once the DNS of second.example points at the panel host
+curl -X POST http://localhost:8080/api/v1/sites/2/ssl \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "primary", "async": true}'
+```
+
+Before the certificate, `http://second.example/...` answers `301` straight to
+the main domain; after it, `http://` goes to `https://second.example/...`
+and from there `301` to the main domain. The certificate is issued by the
+panel (certbot, HTTP-01) for the site name and its `www.` if enabled.
+
 ## Usage Examples
 
 ### cURL

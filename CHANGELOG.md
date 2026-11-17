@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- API `GET`/`POST /api/v1/sites/{id}/redirects` and `DELETE /api/v1/sites/{id}/redirects/{redirectId}` manage a site's redirects (code 301 or 302, `preserve_path`, `preserve_query`, `priority`); `POST` is idempotent for an identical redirect and answers `409` for the same `source_path` with other settings; docs describe pointing a secondary domain at the main one with its own site, a redirect on `/` and a panel-issued certificate
+
+### Fixed
+- A redirect on `/` no longer produces a config with two `location /` blocks (nginx rejected it): an enabled redirect on `/` replaces the static fallback
+
 ## [1.4.4] - 2026-11-02
 
 ### Fixed

@@ -328,6 +328,90 @@ DELETE /api/v1/sites/:id/domains/:domainId
 алиасов, `DELETE` — `{"message": "domain alias deleted"}`. Сертификат на
 алиасы — `POST /api/v1/sites/:id/ssl` с `mode` `all` или `aliases`.
 
+### Редиректы
+
+Редиректы сайта — те же, которыми управляет веб-панель (nginx `return` в
+`location`).
+
+```
+GET /api/v1/sites/:id/redirects
+POST /api/v1/sites/:id/redirects
+DELETE /api/v1/sites/:id/redirects/:redirectId
+```
+
+`POST` принимает:
+
+| Поле | Описание |
+|------|----------|
+| `source_path` | Обязательное. Путь, начинается с `/`. `/` ловит все запросы |
+| `target_url` | Обязательное. URL `http://` или `https://`, либо относительный |
+| `code` | `301` (по умолчанию) или `302` |
+| `preserve_path` | Дописать путь запроса к `target_url`; по умолчанию `false` |
+| `preserve_query` | Дописать строку запроса; по умолчанию `false` |
+| `priority` | Порядок в списке, больший выше; по умолчанию `0` |
+
+Отвечает `201 Created` с редиректом:
+
+```json
+{
+  "id": 5,
+  "site_id": 2,
+  "source_path": "/",
+  "target_url": "https://example.com",
+  "code": 301,
+  "preserve_path": true,
+  "preserve_query": true,
+  "priority": 0,
+  "is_enabled": true
+}
+```
+
+Повтор редиректа с теми же `source_path`, `target_url`, `code` и флагами —
+`200 OK` с существующим; тот же `source_path` с другими настройками —
+`409 Conflict`. `GET` возвращает массив, `DELETE` — `{"message": "redirect
+deleted"}`. Конфиг nginx переписывается и перезагружается при каждом
+изменении; если nginx его отверг, конфиг откатывается, редирект не
+сохраняется, ответ — `500`.
+
+Редирект на `/` заменяет статический `location /` сайта, поэтому сайт больше
+ничего не отдаёт. Путь ACME-проверки остаётся доступным, сертификат
+по-прежнему выпускается.
+
+**Ошибки:**
+- `400 Bad Request` — неверный ID, нет поля, код не 301/302, неверный путь или URL
+- `403 Forbidden` — чужой сайт или редирект другого сайта
+- `404 Not Found` — сайт или редирект не найден (тело JSON с `error`; панель старше этого API отвечает на эти маршруты голым `404 page not found`, по этому клиент её и распознаёт)
+- `500 Internal Server Error` — nginx отверг конфиг
+
+#### Редирект дополнительного домена на основной
+
+Алиас (`/sites/:id/domains`) — ещё одно имя того же сайта с тем же
+содержимым, поэтому редирект на этом сайте перенаправил бы и основной домен.
+Домен, который должен отвечать `301` на другой, — отдельный сайт:
+
+```bash
+# 1. сайт с именем дополнительного домена
+curl -X POST http://localhost:8080/api/v1/sites \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "second.example"}'
+# 2. всё уходит на основной домен, путь и запрос сохраняются
+curl -X POST http://localhost:8080/api/v1/sites/2/redirects \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{"source_path": "/", "target_url": "https://example.com", "code": 301, "preserve_path": true, "preserve_query": true}'
+# 3. сертификат, когда DNS second.example указывает на хост панели
+curl -X POST http://localhost:8080/api/v1/sites/2/ssl \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "primary", "async": true}'
+```
+
+До сертификата `http://second.example/...` сразу отвечает `301` на основной
+домен; после него `http://` уходит на `https://second.example/...`, а оттуда
+— `301` на основной домен. Сертификат выпускает сама панель (certbot,
+HTTP-01) на имя сайта и его `www.`, если включён.
+
 ## Примеры использования
 
 ### cURL
