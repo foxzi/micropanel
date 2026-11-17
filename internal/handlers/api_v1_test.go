@@ -38,12 +38,23 @@ type apiFixture struct {
 	ownerID    int64
 	// certbot stands in for the certbot command; the default succeeds.
 	certbot func(args ...string) ([]byte, error)
+	// redirectNginx stands in for nginx when a redirect changes the config.
+	redirectNginx *recordingNginx
 }
 
 type nopNginx struct{}
 
 func (nopNginx) ApplyConfig(int64) error { return nil }
 func (nopNginx) Reload() error           { return nil }
+
+// recordingNginx counts config applications and fails them on demand.
+type recordingNginx struct {
+	applied int
+	err     error
+}
+
+func (n *recordingNginx) ApplyConfig(int64) error { n.applied++; return n.err }
+func (n *recordingNginx) Reload() error           { return nil }
 
 func newAPIFixture(t *testing.T) *apiFixture {
 	t.Helper()
@@ -79,7 +90,7 @@ func newAPIFixture(t *testing.T) *apiFixture {
 	domainRepo := repository.NewDomainRepository(db)
 	deployRepo := repository.NewDeployRepository(db)
 	userRepo := repository.NewUserRepository(db)
-	f := &apiFixture{deployRepo: deployRepo, siteID: siteID, ownerID: ownerID}
+	f := &apiFixture{deployRepo: deployRepo, siteID: siteID, ownerID: ownerID, redirectNginx: &recordingNginx{}}
 	f.certbot = func(...string) ([]byte, error) { return []byte("ok"), nil }
 	sslService := services.NewSSLService(cfg, siteRepo, domainRepo, nil)
 	sslService.SetCommands(
@@ -93,6 +104,7 @@ func newAPIFixture(t *testing.T) *apiFixture {
 		nil, sslService,
 		services.NewAuditService(repository.NewAuditRepository(db)),
 		domainRepo, userRepo,
+		services.NewRedirectService(repository.NewRedirectRepository(db), f.redirectNginx),
 	)
 
 	r := gin.New()
@@ -105,6 +117,9 @@ func newAPIFixture(t *testing.T) *apiFixture {
 	api.POST("/sites/:id/deploy", h.Deploy)
 	api.GET("/sites/:id/deploys", h.ListDeploys)
 	api.POST("/sites/:id/ssl", h.IssueSSL)
+	api.POST("/sites/:id/redirects", h.CreateRedirect)
+	api.GET("/sites/:id/redirects", h.ListRedirects)
+	api.DELETE("/sites/:id/redirects/:redirectId", h.DeleteRedirect)
 	f.router = r
 	return f
 }
@@ -336,5 +351,131 @@ func TestAPISyncCertificateIsUnchanged(t *testing.T) {
 	f.certbot = func(...string) ([]byte, error) { return nil, errors.New("certbot command failed") }
 	if w := f.do(t, http.MethodPost, fmt.Sprintf("/api/v1/sites/%d/ssl", f.siteID), ownerToken, `{}`); w.Code != http.StatusInternalServerError {
 		t.Fatalf("failing certbot: code = %d, want 500", w.Code)
+	}
+}
+
+const rootRedirect = `{"source_path":"/","target_url":"https://main.example.test","preserve_path":true,"preserve_query":true}`
+
+func (f *apiFixture) redirects() string { return fmt.Sprintf("/api/v1/sites/%d/redirects", f.siteID) }
+
+func TestAPICreateRedirectDefaultsTo301AndAppliesTheConfig(t *testing.T) {
+	f := newAPIFixture(t)
+
+	w := f.do(t, http.MethodPost, f.redirects(), ownerToken, rootRedirect)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("code = %d %s, want 201", w.Code, w.Body)
+	}
+	got := decode[models.Redirect](t, w)
+	want := models.Redirect{ID: got.ID, SiteID: f.siteID, SourcePath: "/", TargetURL: "https://main.example.test", Code: 301, PreservePath: true, PreserveQuery: true, IsEnabled: true}
+	if got.ID == 0 || got != want {
+		t.Fatalf("redirect = %+v, want %+v", got, want)
+	}
+	if f.redirectNginx.applied != 1 {
+		t.Errorf("nginx applied %d times, want 1", f.redirectNginx.applied)
+	}
+
+	list := decode[[]models.Redirect](t, f.do(t, http.MethodGet, f.redirects(), ownerToken, ""))
+	if len(list) != 1 || list[0] != want {
+		t.Fatalf("list = %+v, want [%+v]", list, want)
+	}
+}
+
+func TestAPICreateRedirectIsIdempotent(t *testing.T) {
+	f := newAPIFixture(t)
+	first := decode[models.Redirect](t, f.do(t, http.MethodPost, f.redirects(), ownerToken, rootRedirect))
+
+	again := f.do(t, http.MethodPost, f.redirects(), ownerToken, rootRedirect)
+	if again.Code != http.StatusOK {
+		t.Fatalf("repeat = %d %s, want 200", again.Code, again.Body)
+	}
+	if got := decode[models.Redirect](t, again); got != first {
+		t.Fatalf("repeat = %+v, want %+v", got, first)
+	}
+	if f.redirectNginx.applied != 1 {
+		t.Errorf("nginx applied %d times, want 1", f.redirectNginx.applied)
+	}
+
+	other := `{"source_path":"/","target_url":"https://other.example.test"}`
+	if w := f.do(t, http.MethodPost, f.redirects(), ownerToken, other); w.Code != http.StatusConflict {
+		t.Fatalf("same path, other target = %d, want 409", w.Code)
+	}
+	if list := decode[[]models.Redirect](t, f.do(t, http.MethodGet, f.redirects(), ownerToken, "")); len(list) != 1 {
+		t.Fatalf("list = %+v, want one redirect", list)
+	}
+}
+
+func TestAPICreateRedirectRejectsBadInput(t *testing.T) {
+	f := newAPIFixture(t)
+	for name, body := range map[string]string{
+		"no target":     `{"source_path":"/"}`,
+		"no source":     `{"target_url":"https://main.example.test"}`,
+		"bad code":      `{"source_path":"/","target_url":"https://main.example.test","code":307}`,
+		"relative path": `{"source_path":"old","target_url":"https://main.example.test"}`,
+		"nginx inject":  `{"source_path":"/","target_url":"https://x.test; return 200"}`,
+		"bad scheme":    `{"source_path":"/","target_url":"javascript:alert(1)"}`,
+	} {
+		if w := f.do(t, http.MethodPost, f.redirects(), ownerToken, body); w.Code != http.StatusBadRequest {
+			t.Errorf("%s: code = %d %s, want 400", name, w.Code, w.Body)
+		}
+	}
+	if f.redirectNginx.applied != 0 {
+		t.Errorf("nginx applied %d times for rejected input", f.redirectNginx.applied)
+	}
+}
+
+func TestAPICreateRedirectNginxFailureLeavesNoRedirect(t *testing.T) {
+	f := newAPIFixture(t)
+	f.redirectNginx.err = errors.New("config test failed, rolled back")
+
+	if w := f.do(t, http.MethodPost, f.redirects(), ownerToken, rootRedirect); w.Code != http.StatusInternalServerError {
+		t.Fatalf("code = %d %s, want 500", w.Code, w.Body)
+	}
+	f.redirectNginx.err = nil
+	if list := decode[[]models.Redirect](t, f.do(t, http.MethodGet, f.redirects(), ownerToken, "")); len(list) != 0 {
+		t.Fatalf("list = %+v, want empty: the row must not outlive a refused config", list)
+	}
+}
+
+func TestAPIDeleteRedirect(t *testing.T) {
+	f := newAPIFixture(t)
+	created := decode[models.Redirect](t, f.do(t, http.MethodPost, f.redirects(), ownerToken, rootRedirect))
+	path := fmt.Sprintf("%s/%d", f.redirects(), created.ID)
+
+	if w := f.do(t, http.MethodDelete, path, strangerToken, ""); w.Code != http.StatusForbidden {
+		t.Fatalf("stranger delete = %d, want 403", w.Code)
+	}
+	applied := f.redirectNginx.applied
+	if w := f.do(t, http.MethodDelete, path, ownerToken, ""); w.Code != http.StatusOK {
+		t.Fatalf("delete = %d %s, want 200", w.Code, w.Body)
+	}
+	if f.redirectNginx.applied != applied+1 {
+		t.Errorf("nginx applied %d times after delete, want %d", f.redirectNginx.applied, applied+1)
+	}
+	if list := decode[[]models.Redirect](t, f.do(t, http.MethodGet, f.redirects(), ownerToken, "")); len(list) != 0 {
+		t.Fatalf("list = %+v, want empty", list)
+	}
+	// A known JSON error, not the router's bare 404: clients tell a missing
+	// redirect from a panel that has no redirect routes.
+	w := f.do(t, http.MethodDelete, path, ownerToken, "")
+	if w.Code != http.StatusNotFound || decode[errorResponse](t, w).Error == "" {
+		t.Fatalf("second delete = %d %s, want 404 with a JSON error", w.Code, w.Body)
+	}
+}
+
+func TestAPIRedirectsOfAnotherUsersSiteAreForbidden(t *testing.T) {
+	f := newAPIFixture(t)
+	f.do(t, http.MethodPost, f.redirects(), ownerToken, rootRedirect)
+
+	if w := f.do(t, http.MethodGet, f.redirects(), strangerToken, ""); w.Code != http.StatusForbidden {
+		t.Errorf("list = %d, want 403", w.Code)
+	}
+	if w := f.do(t, http.MethodPost, f.redirects(), strangerToken, rootRedirect); w.Code != http.StatusForbidden {
+		t.Errorf("create = %d, want 403", w.Code)
+	}
+	if w := f.do(t, http.MethodGet, "/api/v1/sites/999/redirects", ownerToken, ""); w.Code != http.StatusNotFound {
+		t.Errorf("unknown site = %d, want 404", w.Code)
+	}
+	if w := f.do(t, http.MethodGet, f.redirects(), "no-such-token", ""); w.Code != http.StatusUnauthorized {
+		t.Errorf("bad token = %d, want 401", w.Code)
 	}
 }

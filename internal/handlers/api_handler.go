@@ -25,9 +25,11 @@ type APIHandler struct {
 	auditService  *services.AuditService
 	domainRepo    *repository.DomainRepository
 	userRepo      *repository.UserRepository
+
+	redirectService *services.RedirectService
 }
 
-func NewAPIHandler(siteService *services.SiteService, deployService *services.DeployService, nginxService *services.NginxService, sslService *services.SSLService, auditService *services.AuditService, domainRepo *repository.DomainRepository, userRepo *repository.UserRepository) *APIHandler {
+func NewAPIHandler(siteService *services.SiteService, deployService *services.DeployService, nginxService *services.NginxService, sslService *services.SSLService, auditService *services.AuditService, domainRepo *repository.DomainRepository, userRepo *repository.UserRepository, redirectService *services.RedirectService) *APIHandler {
 	return &APIHandler{
 		siteService:   siteService,
 		deployService: deployService,
@@ -36,6 +38,8 @@ func NewAPIHandler(siteService *services.SiteService, deployService *services.De
 		auditService:  auditService,
 		domainRepo:    domainRepo,
 		userRepo:      userRepo,
+
+		redirectService: redirectService,
 	}
 }
 

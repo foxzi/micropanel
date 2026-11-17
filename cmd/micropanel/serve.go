@@ -115,7 +115,7 @@ func runServe(cmd *cobra.Command, args []string) {
 	auditHandler := handlers.NewAuditHandler(auditService, userRepo)
 	userHandler := handlers.NewUserHandler(userRepo, auditService)
 	apiTokenHandler := handlers.NewAPITokenHandler(apiTokenService, auditService)
-	apiHandler := handlers.NewAPIHandler(siteService, deployService, nginxService, sslService, auditService, domainRepo, userRepo)
+	apiHandler := handlers.NewAPIHandler(siteService, deployService, nginxService, sslService, auditService, domainRepo, userRepo, redirectService)
 
 	if !cfg.IsDevelopment() {
 		gin.SetMode(gin.ReleaseMode)
@@ -229,6 +229,10 @@ func runServe(cmd *cobra.Command, args []string) {
 			apiGroup.DELETE("/sites/:id/domains/:domainId", apiHandler.DeleteDomain)
 
 			apiGroup.POST("/sites/:id/ssl", apiHandler.IssueSSL)
+
+			apiGroup.POST("/sites/:id/redirects", apiHandler.CreateRedirect)
+			apiGroup.GET("/sites/:id/redirects", apiHandler.ListRedirects)
+			apiGroup.DELETE("/sites/:id/redirects/:redirectId", apiHandler.DeleteRedirect)
 		}
 	}
 
