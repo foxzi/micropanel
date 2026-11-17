@@ -111,10 +111,11 @@ server {
     # Fix MIME types for files with encoded query strings in filenames
     include /etc/nginx/hack.conf;
 {{end}}
+{{if not .RootRedirect}}
     location / {
         try_files $uri $uri/ =404;
     }
-
+{{end}}
     # Deny access to hidden files
     location ~ /\. {
         deny all;
@@ -161,10 +162,11 @@ server {
     # Fix MIME types for files with encoded query strings in filenames
     include /etc/nginx/hack.conf;
 {{end}}
+{{if not .RootRedirect}}
     location / {
         try_files $uri $uri/ =404;
     }
-
+{{end}}
     # Deny access to hidden files
     location ~ /\. {
         deny all;
@@ -184,6 +186,9 @@ type nginxTemplateData struct {
 	HasSSL       bool
 	SSLCertName  string
 	FixMimeTypes bool
+	// RootRedirect is set when an enabled redirect owns "/": it replaces the
+	// default `location /`, since nginx rejects the same location twice.
+	RootRedirect bool
 }
 
 func (s *NginxService) GenerateConfig(siteID int64) (string, error) {
@@ -215,6 +220,13 @@ func (s *NginxService) GenerateConfig(siteID int64) (string, error) {
 		}
 	}
 
+	rootRedirect := false
+	for _, r := range redirects {
+		if r.IsEnabled && r.SourcePath == "/" {
+			rootRedirect = true
+		}
+	}
+
 	// Get auth zones if repo is set
 	var authZones []*models.AuthZone
 	if s.authZoneRepo != nil {
@@ -240,6 +252,7 @@ func (s *NginxService) GenerateConfig(siteID int64) (string, error) {
 		HasSSL:       site.SSLEnabled,
 		SSLCertName:  site.GetSSLCertName(),
 		FixMimeTypes: site.FixMimeTypes,
+		RootRedirect: rootRedirect,
 	}
 
 	tmpl, err := template.New("nginx").Parse(nginxSiteTemplate)

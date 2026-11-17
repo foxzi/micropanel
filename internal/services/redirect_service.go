@@ -16,10 +16,10 @@ var (
 
 type RedirectService struct {
 	redirectRepo *repository.RedirectRepository
-	nginxService *NginxService
+	nginxService NginxConfigurator
 }
 
-func NewRedirectService(redirectRepo *repository.RedirectRepository, nginxService *NginxService) *RedirectService {
+func NewRedirectService(redirectRepo *repository.RedirectRepository, nginxService NginxConfigurator) *RedirectService {
 	return &RedirectService{
 		redirectRepo: redirectRepo,
 		nginxService: nginxService,
