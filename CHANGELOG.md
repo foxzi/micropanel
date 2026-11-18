@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-18
+
 ### Added
 - API `GET`/`POST /api/v1/sites/{id}/redirects` and `DELETE /api/v1/sites/{id}/redirects/{redirectId}` manage a site's redirects (code 301 or 302, `preserve_path`, `preserve_query`, `priority`); `POST` is idempotent for an identical redirect and answers `409` for the same `source_path` with other settings; docs describe pointing a secondary domain at the main one with its own site, a redirect on `/` and a panel-issued certificate
 
